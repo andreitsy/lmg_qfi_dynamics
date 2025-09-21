@@ -2,15 +2,17 @@ name: lmg-qfi
 channels:
   - defaults
 dependencies:
-  - python
+  - python==3.12.11
   - pandas
   - scipy
   - ipython
   - jupyterlab
   - matplotlib
   - numpy
+  - pytest
   - pip
   - pip:
       - qiskit
       - qiskit-ibm-runtime
       - sympy
+      - quspin
