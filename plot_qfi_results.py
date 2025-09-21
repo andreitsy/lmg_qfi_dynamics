@@ -2,15 +2,12 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sympy.printing.pretty.pretty_symbology import line_width
 
 from quantum_fisher_information_simulation import (
     read_defaults_args_from_config,
     create_hamiltonian_h0,
     find_eigen_values_mpmath,
     results_dir,
-    analytical_form,
-    find_gap
 )
 from scipy.ndimage import gaussian_filter
 from pathlib import Path
@@ -20,7 +17,8 @@ mpl.rcParams["text.usetex"] = True
 mpl.rcParams["font.family"] = "serif"
 mpl.rcParams["font.serif"] = ["Computer Modern"]
 mpl.rcParams["text.latex.preamble"] = r"\usepackage{amsmath,amsfonts,amssymb}"
-MAX_TIME_POW = 14
+MAX_TIME_POW = 15
+Y_LABEL_COORDINATE = 0.3
 results_dir = Path(__file__).parent / "results"
 
 
@@ -104,7 +102,7 @@ def plot_quasienergies(ax, J, h, N):
         e1 = float(eigvals[pair_idx, 0].real)
         e2 = float(eigvals[pair_idx + 1, 0].real)
         mean_energy = (e1 + e2) / 2  # Mean of the pair values
-        point1 = np.exp(1j * (e1 - np.pi)
+        point1 = np.exp(1j * e1)
         point2 = np.exp(1j * (e2 + np.pi))
         if mean_energy < symmetry_edge:
             energy_points.append({'point': point1, 'color': 'blue'})
@@ -147,7 +145,7 @@ def plot_quasienergies(ax, J, h, N):
     }
 
     for annotation in annotations:
-        if annotation['mean_energy'] >= symmetry_edge:
+        if annotation['mean_energy'] >= symmetry_edge or pair_idx > 7:
             break
         pair_idx = annotation['pair_idx']
         gap = annotation['gap']
@@ -210,7 +208,7 @@ def plot_quasienergies(ax, J, h, N):
             va="top", ha="left")
     # Add labels and legend
 
-def plot_qfi_data_subplot(ax, df, J, h, n, tau, max_time_pow=15):
+def plot_qfi_data_subplot(ax, df, J, h, n, tau, max_time_pow=13):
     """Plot QFI values onto the provided subplot axes (ax)."""
     # Loop through different initial state groups in QFI data
     for state in [
@@ -220,13 +218,15 @@ def plot_qfi_data_subplot(ax, df, J, h, n, tau, max_time_pow=15):
         "GS_PHYS",
     ]:
         filtered_data = df[df["initial_state"] == state]
-        time_points = filtered_data["time_points"].values[: 10 ** max_time_pow]
-        qfi_values = filtered_data["qfi_values"].values[: 10 ** max_time_pow]
+        time_points = filtered_data["time_points"].values
+        indices = np.where(time_points < 10 ** max_time_pow)[0]
+        time_points = time_points[indices]
+        qfi_values = filtered_data["qfi_values"].values[indices]
         if "GS" in state:
-            qfi_values[:20] = np.mean(qfi_values[0:100])
+            #qfi_values[:10] = np.mean(qfi_values[0:100])
             y_smooth = qfi_values
         else:
-            qfi_values[:1000] = gaussian_filter(qfi_values[:1000], sigma=2)
+            qfi_values[:100] = gaussian_filter(qfi_values[:100], sigma=1)
             y_smooth = qfi_values
 
         qfi_values[qfi_values < 0] = 0  # Ensure no negative QFI values
@@ -248,27 +248,21 @@ def plot_qfi_data_subplot(ax, df, J, h, n, tau, max_time_pow=15):
             label = state
         # Plot QFI data
         ax.plot(time_points, y_smooth, "-", label=label, linewidth=3)
-        if "GS" in state and False:
-            H = create_hamiltonian_h0(J, h, n, precision="mpmath")
-            gap = find_gap(H, precision="mpmath")
-            theta = np.pi / 2 if state == "GS_PHYS" else 0
-            m = 0.5 * (1 - 0.5 * (h / J) ** 2 - 0.125 * (h / J) ** 4) - (1 / (4 * n)) * (h / J) ** 4
-            a_qfi = analytical_form(time_points, theta, 0, tau, m, gap)
-            ax.plot(time_points, a_qfi, "--", label=rf"$F_h$ for {state}")
     # Customize QFI subplot
+    ax.set_title(rf"QFI dynamics for $N={n}, B/J={h:.2f}$", fontsize=40)
     ax.set_xlabel(r"$t / T$", fontsize=40)
     ax.set_ylabel(r"$F_h / (N t)^2$", fontsize=40)
-    ax.legend(
-        title="Initial State", loc=(0.33, 0.55), fontsize=28, title_fontsize=26
-    ).set_zorder(10)
+    # ax.legend(
+    #     title="Initial State", loc=(0.33, 0.55), fontsize=28, title_fontsize=26
+    # ).set_zorder(10)
     ax.set_xscale("log")  # Logarithmic scale for time
-    ax.set_ylim([0, 0.35])
+    ax.set_ylim([0, np.abs((1 - h ** 2) * 4 / np.pi ** 2)])
     ax.set_xticks([10 ** n for n in range(1, max_time_pow, 2)])
     ax.tick_params(axis="x", labelsize=30)  # Adjust x-axis tick label font size
     ax.tick_params(axis="y", labelsize=30)  # Adjust y-axis tick label font size
     ax.grid(True, linestyle="--", alpha=0.6, linewidth=1.7)
-    ax.text(-0.135, 1, r"(c)", fontsize=50, fontweight="bold",
-            va="top", ha="left", transform=ax.transAxes)
+    # ax.text(-0.135, 1, r"(c)", fontsize=50, fontweight="bold",
+    #         va="top", ha="left", transform=ax.transAxes)
     H = create_hamiltonian_h0(J, h, n, precision="mpmath")
     symmetry_edge = -1 * h * n
     eigvals_H_real = find_eigen_values_mpmath(H)
@@ -280,17 +274,16 @@ def plot_qfi_data_subplot(ax, df, J, h, n, tau, max_time_pow=15):
             pairs[pair_num] = []
         pairs[pair_num].append(float(eigenvalue))
     for pair_idx, energies in pairs.items():
-        if energies[0] <= symmetry_edge:
+        if energies[0] <= symmetry_edge and pair_idx < 7:
             if len(energies) == 2:
                 gap = abs(energies[1] - energies[0])
                 ax.axvline(x=2 * np.pi / gap, color='black',
                            linestyle='--', alpha=0.7, linewidth=2)
                 # Adding the annotation with value 1/Δ
-                start_point = 0.155
                 ax.annotate(
                     f"$\\frac{{2\\pi}}{{\\Delta_{{{pair_idx+1}\\overline{{{pair_idx+1}}}}}}}$",
-                    xy=(2 * np.pi / gap, start_point),
-                    xytext=(2 * np.pi / gap * 1.03, start_point),
+                    xy=(2 * np.pi / gap, Y_LABEL_COORDINATE),
+                    xytext=(2 * np.pi / gap * 1.03, Y_LABEL_COORDINATE),
                     fontsize=54,
                     color='black'
                 )
@@ -316,7 +309,7 @@ def plot_both_subplots(J, h, n, tau, df):
     # plot_energy_levels_subplot(ax2, J, h, n)
     # Customize layout and save the figure
     plt.tight_layout()
-    plt.savefig(results_dir / "qfi_dynamics.png", dpi=300)
+    plt.savefig(results_dir / f"qfi_dynamics_h={h:.2f}_N={n}.png", dpi=300)
 
 
 def plot_data(df):
