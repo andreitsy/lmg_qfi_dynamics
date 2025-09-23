@@ -19,10 +19,11 @@ conda env create -f environment.yml
 ```
 2. Run script 
 ```
-./quantum_fisher_information_simulation.py
+./quantum_fisher_information_simulation_mpmath.py
 ```
-This will read params from file `qfi_simulation.ini`and generate results of simulation to `results/general_case.png.csv`
-3. Run script to create graph based on data
+This will read params from file `parameters.ini` and generate results of simulation to `results/general_case.png.csv`
+
+4. Run script to create graph based on data
 ```
-./plot_qfi_results.py
+./quantum_fisher_information_simulation_mpmath.py --plot
 ```
