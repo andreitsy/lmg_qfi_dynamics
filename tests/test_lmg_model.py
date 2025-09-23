@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from scipy.linalg import eigh
-from ..simulation_qfi import build_naive_hamiltonian, evolution_stroboscopic, get_observable
+from ..simulation_qfi_quspin import build_hamiltonian_lmg, evolution_stroboscopic, get_observable
 
 # suppress=True avoids scientific notation for small numbers
 np.set_printoptions(precision=4, suppress=True)
@@ -122,16 +122,27 @@ def create_h_ac_operator(S_x, S_y, S_z, nu, T, phi_0, h, t_k, theta_0, varphi_0)
     return h * v_ac
 
 
+
 @pytest.mark.parametrize("J, B, N", [
-    pytest.param(1.0, 0.1, 4, id="base_case"),
+    pytest.param(1.0, 0.0, 1, id="no_B_field"),
+    pytest.param(1.0, 0.0, 10, id="no_B_field_big"),
+    pytest.param(1.0, 1.0, 10, id="B_field_case"),
+    pytest.param(1.0, 0.4, 25, id="base_case"),
+])
+def test_hamiltonian(J, B, N):
+    ham_expected = create_hamiltonian_h0(J, B, N)
+    ham = build_hamiltonian_lmg(N, J, B)
+    assert np.allclose(ham.as_dense_format().toarray(), ham_expected)
+
+@pytest.mark.parametrize("J, B, N", [
+    pytest.param(1.0, 0.1, 6, id="base_case"),
+    pytest.param(1.0, 0.01, 10, id="small_h_case"),
+    pytest.param(1.0, 0.1, 30, id="small_h_case"),
 ])
 def test_eigenvalues(J, B, N):
     ham_expected = create_hamiltonian_h0(J, B, N)
     eigenvalues_expected, eigvecs_expected = eigh(ham_expected, check_finite=False, eigvals_only=False)
-
-    sorted_indices_Ho = np.argsort(np.real(eigenvalues_expected))
-    eigvecs_sorted = [eigvecs_expected[:, i] for i in sorted_indices_Ho]
-    print("\n", eigenvalues_expected)
-    print("\n", eigvecs_sorted[0])
-    print("\n", eigvecs_sorted[1])
-    print("\n", (eigvecs_sorted[0] + eigvecs_sorted[1]) / np.sqrt(2))
+    ham = build_hamiltonian_lmg(N, J, B)
+    eigenvalues, eigvecs = ham.eigh()
+    assert np.allclose(eigenvalues, eigenvalues_expected)
+    assert np.allclose(eigvecs, eigvecs_expected)

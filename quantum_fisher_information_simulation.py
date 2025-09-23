@@ -934,44 +934,79 @@ def observarble_simulation_optimal_with_AC_field(
     fu_delta_p2_eigenvalues, fu_delta_p2_eigenvectors = np.linalg.eig(
         floquet_unitary_p2_delta_T
     )
-    # Create a pooled process to parallelize tasks
-    with Pool() as pool:
-        args = [
-            (
-                time,
-                A,
-                n,
-                J,
-                phi,
-                h,
-                tau,
-                varphi,
-                theta,
-                phi_0,
-                nu,
-                epsilon,
-                steps_floquet_unitary,
-                H_0,
-                fu_eigenvalues,
-                fu_eigenvectors,
-                fu_delta_m_eigenvalues,
-                fu_delta_m_eigenvectors,
-                fu_delta_m2_eigenvalues,
-                fu_delta_m2_eigenvectors,
-                fu_delta_p_eigenvalues,
-                fu_delta_p_eigenvectors,
-                fu_delta_p2_eigenvalues,
-                fu_delta_p2_eigenvectors,
-                ket_0,
-                gs_mins_0,
-                gs_plus_0,
-                Zsum,
-                Xsum,
-                Ysum,
-            )
-            for time in time_interval
-        ]
-        results = pool.starmap(process_time_point, args, chunksize=100)
+    # # Create a pooled process to parallelize tasks
+    # with Pool() as pool:
+    #     args = [
+    #         (
+    #             time,
+    #             A,
+    #             n,
+    #             J,
+    #             phi,
+    #             h,
+    #             tau,
+    #             varphi,
+    #             theta,
+    #             phi_0,
+    #             nu,
+    #             epsilon,
+    #             steps_floquet_unitary,
+    #             H_0,
+    #             fu_eigenvalues,
+    #             fu_eigenvectors,
+    #             fu_delta_m_eigenvalues,
+    #             fu_delta_m_eigenvectors,
+    #             fu_delta_m2_eigenvalues,
+    #             fu_delta_m2_eigenvectors,
+    #             fu_delta_p_eigenvalues,
+    #             fu_delta_p_eigenvectors,
+    #             fu_delta_p2_eigenvalues,
+    #             fu_delta_p2_eigenvectors,
+    #             ket_0,
+    #             gs_mins_0,
+    #             gs_plus_0,
+    #             Zsum,
+    #             Xsum,
+    #             Ysum,
+    #         )
+    #         for time in time_interval
+    #     ]
+    #     results = pool.starmap(process_time_point, args, chunksize=100)
+    results = []
+    for time in time_interval:
+        res = process_time_point(
+            time,
+            A,
+            n,
+            J,
+            phi,
+            h,
+            tau,
+            varphi,
+            theta,
+            phi_0,
+            nu,
+            epsilon,
+            steps_floquet_unitary,
+            H_0,
+            fu_eigenvalues,
+            fu_eigenvectors,
+            fu_delta_m_eigenvalues,
+            fu_delta_m_eigenvectors,
+            fu_delta_m2_eigenvalues,
+            fu_delta_m2_eigenvectors,
+            fu_delta_p_eigenvalues,
+            fu_delta_p_eigenvectors,
+            fu_delta_p2_eigenvalues,
+            fu_delta_p2_eigenvectors,
+            ket_0,
+            gs_mins_0,
+            gs_plus_0,
+            Zsum,
+            Xsum,
+            Ysum,
+        )
+        results.append(res)
 
     return results
 
@@ -1593,9 +1628,7 @@ def run_phi_mix_simulation(args):
 
     for phi_mix in phi_mix_values:
         logging.info(f"Simulating with phi_mix = {np.real(phi_mix):.4f}")
-        time_interval = generate_time_interval(
-            args.time_points, args.points_per_range
-        )
+        time_interval = range(1, 100, 10)
         result = observarble_simulation_optimal_with_AC_field(
             args.amplitude,
             args.system_size,
@@ -1637,15 +1670,13 @@ def run_energy_levels_simulation(args):
     output_file = f"{args.output_dir}/general_case.png"
     init_states = [
         InitialState.PHYS,
-        InitialState.GS_PHYS,
-        InitialState.GS_CAT,
-        InitialState.CAT_SUM,
+        # InitialState.GS_PHYS,
+        # InitialState.GS_CAT,
+        # InitialState.CAT_SUM,
     ]
 
     for state in init_states:
-        time_interval = generate_time_interval(
-            args.time_points, args.points_per_range, csv_filename=output_file
-        )
+        time_interval = range(1, 100, 10)
         logging.info(
             f"Simulating for '{state}' state "
             f"for {len(time_interval)} points!"

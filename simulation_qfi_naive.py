@@ -89,15 +89,16 @@ def read_defaults_args_from_config() -> Tuple[SimulationParams, dict]:
 def build_naive_hamiltonian(size: int, J: float, B: float, T: float = 1, theta: float = np.pi):
     basis = spin_basis_1d(size, pauli=0)  # pauli=0 uses S=1/2 operators (S_x, S_y, S_z )
     static = [
-        ["zz", [[-J / size, i, j] for i in range(size) for j in range(size)]],  # -J / N S_z^2
+        ["zz", [[-2*J / size, i, j] for i in range(size) for j in range(size)]],  # -J / N S_z^2
         ["x", [[-2 * B, i] for i in range(size)]],  # -2 B J_z
     ]
 
-    def kick_dynamics(t):
-        return (-1) ** (t // T)
+    def kick_dynamics(t, T, epsilon=0.0001):
+        n = round(t / T)
+        return np.exp(-((t - n * T) ** 2) / (2 * epsilon ** 2)) / (epsilon * np.sqrt(2 * np.pi)) if n > 0 else 0
 
     dynamic = [
-        ["x", [[-theta, i] for i in range(size)], kick_dynamics, []],
+        ["x", [[-theta, i] for i in range(size)], kick_dynamics, [T]],
     ]
     return hamiltonian(static, dynamic, basis=basis)
 
@@ -108,7 +109,7 @@ def get_observable(hamilt, N):
 
 
 def evolution_stroboscopic(hamilt, psi0, num_periods, operator, N, T: float = 1, theta: float = np.pi):
-    times = Floquet_t_vec(2 * np.pi / (2 * T), num_periods, len_T=2)
+    times = Floquet_t_vec(2 * np.pi / (2 * T), num_periods, len_T=200)
     # t_list = (np.array([t.T, 2*t.T]) + np.finfo(float).eps)  # times to evaluate H
     # dt_list = np.array([t.T, t.T])  # time step durations to apply H for
     # Floq = Floquet(
@@ -121,7 +122,7 @@ def evolution_stroboscopic(hamilt, psi0, num_periods, operator, N, T: float = 1,
 
     # Plot dynamics
     plt.figure(figsize=(8, 6))
-    plt.plot(times, operator_expect, label=r'$\langle S_z(t) \rangle / N$')
+    plt.plot(times / T, operator_expect, label=r'$\langle S_z(t) \rangle / N$')
     plt.xlabel('Time')
     plt.ylabel(r'$\langle S_z(t) \rangle / N$')
     plt.title(f'LMG Model: Magnetization Dynamics')
@@ -143,7 +144,7 @@ def run_simulation(params: SimulationParams):
     psi0 = psi0 / np.linalg.norm(psi0)
     # psi0 = (V1[:, 0] + V1[:, 1]) / np.sqrt(2)
     Sz = get_observable(H, N)
-    evolution_stroboscopic(H, psi0, 20, Sz, N)
+    evolution_stroboscopic(H, psi0, 60, Sz, N)
 
 
 if __name__ == "__main__":
