@@ -14,7 +14,6 @@ from itertools import combinations_with_replacement
 from quspin.tools.Floquet import Floquet_t_vec
 from quspin.operators import hamiltonian, quantum_operator
 from quspin.basis import spin_basis_1d
-
 import matplotlib as mpl
 
 mpl.rcParams["text.usetex"] = True

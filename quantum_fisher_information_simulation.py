@@ -11,8 +11,7 @@ from typing import Optional, Union
 from numpy import typing
 from enum import Enum
 from itertools import chain
-from multiprocessing import Pool
-from scipy.linalg import eigh, expm, eigvalsh_tridiagonal, eigh_tridiagonal
+from scipy.linalg import eigh, expm, eigvalsh_tridiagonal
 from dataclasses import dataclass
 from pathlib import Path
 import mpmath as mp

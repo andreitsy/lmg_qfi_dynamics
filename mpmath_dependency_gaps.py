@@ -115,7 +115,7 @@ def create_spin_plus_operators(n):
     """
     Sminus = create_spin_minus_operators(n)
     # Hermitian conjugate (transpose + conjugate)
-    Splus = mp.matrix(Sminus.T)  # take transpose
+    Splus = Sminus.T  # take transpose
 
     for i in range(n + 1):
         for j in range(n + 1):
@@ -599,5 +599,5 @@ def run_sim():
 
 
 if __name__ == "__main__":
-    # run_gaps()
+    run_gaps()
     run_sim()

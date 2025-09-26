@@ -1,11 +1,187 @@
 import pytest
 import numpy as np
-from scipy.linalg import eigh
-from ..simulation_qfi_quspin import build_hamiltonian_lmg, evolution_stroboscopic, get_observable
+import mpmath as mp
+from ..simulation_qfi_quspin import build_hamiltonian_lmg
+from ..mpmath_dependency_gaps import (
+    create_v_operator as create_v_operator_mpmath,
+    create_hamiltonian_h0 as create_hamiltonian_h0_mpmath)
+from scipy.linalg import eigh, expm
 
 # suppress=True avoids scientific notation for small numbers
 np.set_printoptions(precision=4, suppress=True)
 
+
+def h_ac(S_x, S_y, S_z, omega, phi_0, t_k, theta, varphi):
+    def _compute_constants(theta, varphi):
+        theta = np.complex128(theta)
+        varphi = np.complex128(varphi)
+        return np.sin(theta), np.cos(theta), np.sin(varphi), np.cos(varphi)
+
+    # Compute the time-dependent sinusoidal factor
+    time_factor = t_k * omega + phi_0
+    sinusoidal_factor = np.sin(time_factor)
+    # Compute constants based on precision
+    sin_theta, cos_theta, sin_varphi, cos_varphi = _compute_constants(theta, varphi)
+    # Calculate and return the AC field Hamiltonian
+    return sinusoidal_factor * (
+        sin_theta * cos_varphi * S_x +
+        sin_theta * sin_varphi * S_y +
+        cos_theta * S_z
+    )
+
+
+def create_v_operator(H_0, S_x, S_y, S_z, omega, phi_0, A, t_k, theta, varphi):
+    S_alpha_part = A * h_ac(S_x, S_y, S_z, omega, phi_0, t_k, theta, varphi)
+    return H_0 + S_alpha_part
+
+
+def evalution_tau_step(
+        floquet_unitary,
+        A,
+        tau,
+        varphi,
+        theta,
+        phi_0,
+        H_0,
+        Xsum,
+        Ysum,
+        Zsum,
+        omega,
+        p,
+        t_delta,
+        steps_floquet_unitary,
+):
+    """
+    Compute the evolution of the Floquet unitary operator over a single interval based on
+    a given precision type, system parameters, and specific time step dynamics. The evolution
+    is computed either using NumPy for standard precision or using mpmath for high precision.
+
+    Parameters
+    ----------
+    floquet_unitary : array_like
+        Initial Floquet unitary matrix representing the state of the system.
+
+    A : float
+        Driving amplitude parameter used in the time evolution operator.
+
+    tau : float
+        Duration of one Floquet period.
+
+    varphi : float
+        Phase parameter of the driving field.
+
+    theta : float
+        Angle parameter influencing the evolution operator.
+
+    phi_0 : float
+        Initial phase for the system evolution.
+
+    H_0 : array_like
+        Static Hamiltonian of the system.
+
+    Xsum : array_like
+        Operator representing the sum of contributions in the X direction.
+
+    Ysum : array_like
+        Operator representing the sum of contributions in the Y direction.
+
+    Zsum : array_like
+        Operator representing the sum of contributions in the Z direction.
+
+    omega : float
+        Driving frequency of the system.
+
+    p : int
+        Index of the current Floquet period.
+
+    t_delta : float
+        Time step size for intermediate computations of the evolution.
+
+    steps_floquet_unitary : int
+        Number of subdivisions (steps) within the current time interval (tau).
+
+    precision : str, optional
+        Precision type for computations. Use "np" for standard NumPy precision or
+        "mp" for high precision calculations with mpmath. Default is "np".
+
+    Returns
+    -------
+    array_like
+        The Floquet unitary matrix updated after the time evolution over the specified
+        interval.
+
+    Raises
+    ------
+    ValueError
+        If an unsupported precision type is specified (neither "np" nor "mp").
+    """
+    linspace = np.linspace(
+        tau * (p - 1),
+        tau * p,
+        steps_floquet_unitary,
+        endpoint=True,
+        dtype=np.complex128,
+        )
+    for t_k in linspace:
+        matrix = create_v_operator(
+            H_0,
+            Xsum,
+            Ysum,
+            Zsum,
+            omega,
+            phi_0,
+            A,
+            t_k,
+            theta,
+            varphi,
+            precision="np",
+        )
+        floquet_unitary = expm(
+            -1j * t_delta * matrix
+        ).dot(floquet_unitary)
+    return floquet_unitary
+
+
+def calculate_unitary_T(
+        A,
+        n,
+        phi,
+        tau,
+        varphi,
+        theta,
+        phi_0,
+        nu,
+        steps_floquet_unitary,
+        H_0,
+        precision="np"
+):
+    Zsum, Xsum, Ysum = create_spin_xyz_operators(n, precision=precision)
+    t_delta = tau / steps_floquet_unitary if precision == "np" else mp.mpf(tau / steps_floquet_unitary)
+    omega = 2.0 * np.pi / (nu * tau) if precision == "np" else mp.mpf(2.0 * mp.pi / (nu * tau))
+    floquet_unitary = np.eye(*H_0.shape, dtype=np.complex128) if precision == "np" else mp.eye(*H_0.shape)
+
+    for p in range(1, nu + 1):  # nu \tau = T
+        floquet_unitary = evalution_tau_step(
+            floquet_unitary,
+            A,
+            tau,
+            varphi,
+            theta,
+            phi_0,
+            H_0,
+            Xsum,
+            Ysum,
+            Zsum,
+            omega,
+            p,
+            t_delta,
+            steps_floquet_unitary,
+            precision=precision,
+        )
+        floquet_unitary = (
+            create_kick_operator(phi, Xsum).dot(floquet_unitary) if precision == "np" else
+            create_kick_operator(phi, Xsum, precision="mpmath") * (floquet_unitary))
+    return floquet_unitary
 
 def create_z_operator(n):
     """
@@ -122,6 +298,29 @@ def create_h_ac_operator(S_x, S_y, S_z, nu, T, phi_0, h, t_k, theta_0, varphi_0)
     return h * v_ac
 
 
+def create_kick_operator(phi, s_x, precision=np.complex128):
+    """
+    Create a kick operator matrix with enhanced precision.
+
+    :param phi: A numerical value representing the angle or phase shift.
+    :param s_x: Matrix representing total spin operator in the x direction.
+    :param precision: String specifying the desired precision:
+                      - "float128": Higher precision using NumPy
+                      - "mpmath": Arbitrary precision using mpmath
+                      - Default: Complex128 precision
+    :return: The matrix exponential of -1j * phi * s_x.
+    """
+    phi = precision(phi)
+    matrix = -1j * phi * s_x.astype(precision)
+    return expm(matrix)
+
+def convert_mpmatrix_to_numpy(mp_math, precision=15):
+    with mp.workdps(precision):
+        np_mat = np.array(
+            [[complex(x.real, x.imag) for x in row] for row in mp_math.tolist()],
+            dtype=np.complex128
+        )
+    return np_mat
 
 @pytest.mark.parametrize("J, B, N", [
     pytest.param(1.0, 0.0, 1, id="no_B_field"),
@@ -134,6 +333,18 @@ def test_hamiltonian(J, B, N):
     ham = build_hamiltonian_lmg(N, J, B)
     assert np.allclose(ham.as_dense_format().toarray(), ham_expected)
 
+
+@pytest.mark.parametrize("J, B, N", [
+    pytest.param(1.0, 0.0, 1, id="no_B_field"),
+    pytest.param(1.0, 0.0, 10, id="no_B_field_big"),
+    pytest.param(1.0, 1.0, 10, id="B_field_case"),
+    pytest.param(1.0, 0.4, 25, id="base_case"),
+])
+def test_hamiltonian_mpmath(J, B, N):
+    ham_expected = create_hamiltonian_h0(J, B, N)
+    ham = create_hamiltonian_h0_mpmath(J, B, N)
+    assert np.allclose(convert_mpmatrix_to_numpy(ham), ham_expected)
+
 @pytest.mark.parametrize("J, B, N", [
     pytest.param(1.0, 0.1, 6, id="base_case"),
     pytest.param(1.0, 0.01, 10, id="small_h_case"),
@@ -141,8 +352,9 @@ def test_hamiltonian(J, B, N):
 ])
 def test_eigenvalues(J, B, N):
     ham_expected = create_hamiltonian_h0(J, B, N)
-    eigenvalues_expected, eigvecs_expected = eigh(ham_expected, check_finite=False, eigvals_only=False)
-    ham = build_hamiltonian_lmg(N, J, B)
+    eigenvalues_expected, eigvecs_expected = (
+        eigh(ham_expected, check_finite=False, eigvals_only=False))
+    ham = build_hamiltonian_lmg(J, B)
     eigenvalues, eigvecs = ham.eigh()
     assert np.allclose(eigenvalues, eigenvalues_expected)
     assert np.allclose(eigvecs, eigvecs_expected)
