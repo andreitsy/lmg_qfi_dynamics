@@ -444,7 +444,8 @@ def simulation_with_AC_field_mp(params: dict, time_interval, init_state, init_st
             Ysum,
         )
         if i % 10 == 0:
-            logging.info(f"Processing now time={time} for {init_state_str} with params: {params}")
+            logging.info(f"{i / len(time_interval) * 100.0::.2f}%: "
+                         f"processing time={time} for {init_state_str} with params: {params}")
         results.append(res)
 
     return results
@@ -533,6 +534,7 @@ def generate_time_interval(num_points: int, max_degree: int) -> list:
         raise ValueError("max_degree should be greater than 1!")
     time_interval = (list(range(1, 10)) +
                      [int(x) for x in np.logspace(1, max_degree, num_points, endpoint=True)])
+    logging.info(f"Time interval is: {time_interval}")
     return time_interval
 
 
