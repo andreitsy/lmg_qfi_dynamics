@@ -3,8 +3,8 @@
 # Exit on any error
 set -e
 
-x_coupling_values=( 0.1 )
-n_values=( 10 )
+x_coupling_values=( 0.15 )
+n_values=( 15 )
 states=("GS_phys" "GS_cat" "CatSum" "Phys")
 
 trap 'echo "🛑 Ctrl-C caught, killing children..."; kill 0' INT
@@ -21,3 +21,10 @@ done
 wait
 
 echo "✅ Simulation finished."
+
+for B in "${x_coupling_values[@]}"; do
+  for N in "${n_values[@]}"; do
+    python ./quantum_fisher_information_simulation_mpmath.py \
+           --system-size "$N" --x-coupling "$B" --plot
+  done
+done

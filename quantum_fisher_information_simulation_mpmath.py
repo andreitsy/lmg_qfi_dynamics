@@ -2,6 +2,7 @@ import mpmath as mp
 import logging
 import matplotlib.pyplot as plt
 import os
+import re
 import numpy as np
 import pandas as pd
 import configparser
@@ -13,6 +14,7 @@ from typing import List
 from pathlib import Path
 import matplotlib as mpl
 
+mp.dps = 100
 mpl.rcParams["text.usetex"] = True
 mpl.rcParams["font.family"] = "serif"
 mpl.rcParams["font.serif"] = ["Computer Modern"]
@@ -444,7 +446,7 @@ def simulation_with_AC_field_mp(params: dict, time_interval, init_state, init_st
             Ysum,
         )
         if i % 10 == 0:
-            logging.info(f"{i / len(time_interval) * 100.0::.2f}%: "
+            logging.info(f"{i / len(time_interval) * 100.0:.2f}%: "
                          f"processing time={time} for {init_state_str} with params: {params}")
         results.append(res)
 
@@ -534,20 +536,25 @@ def generate_time_interval(num_points: int, max_degree: int) -> list:
         raise ValueError("max_degree should be greater than 1!")
     time_interval = (list(range(1, 10)) +
                      [int(x) for x in np.logspace(1, max_degree, num_points, endpoint=True)])
-    logging.info(f"Time interval is: {time_interval}")
+    logging.info(f"Time interval is: {time_interval[0]} to {time_interval[-1]}")
     return time_interval
 
 
 def run_simulation(params: SimulationParams, init_states: List[InitialState]):
     dps = params.run_arguments["dps"]
     num_points = params.run_arguments["num_points"]
-    params_dict = dict(phi=params.phi_kick_phase, J=params.J, B=params.B,
-                       N=params.N, T=params.T, h=params.h, nu=params.freq,
-                       varphi=params.varphi, phi_0=params.phi_0, theta=params.theta,
-                       epsilon=mp.mpf(f"1e-{dps // 2}"),
-                       steps_floquet_unitary=params.run_arguments["steps_floquet_unitary"])
 
     with mp.workdps(dps):
+        params_dict = dict(
+            phi=params.phi_kick_phase,
+            J=mp.mpf(f"{float(params.J):.2f}"),
+            B=mp.mpf(f"{float(params.B):.3f}"),
+            T=mp.mpf(f"{float(params.T):.2f}"),
+            h=mp.mpf(f"{float(params.h):.3f}"),
+            epsilon=mp.mpf(f"1e-{dps // 2}"),
+            N=params.N, nu=params.freq,
+            varphi=params.varphi, phi_0=params.phi_0, theta=params.theta,
+            steps_floquet_unitary=params.run_arguments["steps_floquet_unitary"])
         vec_size = params.N + 1
         H = create_hamiltonian_h0(params.J, params.B, params.N)
         energies, evecs = mp.eigh(H)
@@ -560,7 +567,7 @@ def run_simulation(params: SimulationParams, init_states: List[InitialState]):
         results = dict()
         for state in init_states:
             if state == InitialState.GS_PHYS:
-                init_state = (ground_state + first_excited_state) / np.sqrt(2)
+                init_state = (ground_state + first_excited_state) / mp.sqrt(2)
             elif state == InitialState.GS_CAT:
                 init_state = ground_state
             elif state == InitialState.PHYS:
@@ -601,7 +608,7 @@ def save_to_file_qfi_dynamics(
         csv_data["m_x"].append(result.m_x)
         csv_data["m_y"].append(result.m_y)
         csv_data["m_z"].append(result.m_z)
-        csv_data["qfi"].append(result.m_z)
+        csv_data["qfi"].append(result.qfi)
 
     df = pd.DataFrame(csv_data)
     df.to_csv(output_file, index=False)
@@ -612,9 +619,10 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
     # Loop through different initial state groups in QFI data
     last_time = -1
     for state in simulations:
-        time_points = [s.time for s in simulations[state]]
+        time_points = simulations[state]["time"].tolist()
         last_time = max(time_points[-1], last_time)
-        qfi_values = [abs(s.qfi) / (simulation_params.N * s.time) ** 2 if s.qfi > 0 else 0 for s in simulations[state]]
+        qfi_values = [abs(raw.qfi) / (simulation_params.N * raw.time) ** 2
+                      if raw.qfi > 0 else 0 for raw in simulations[state].itertuples(index=True)]
         # Labels for each state
         if state == "GS_PHYS":
             label = (r"$\left(\big|E_1 {\bigr \rangle} + "
@@ -679,7 +687,7 @@ def plot(simulations: dict, simulation_params: SimulationParams, results_dir: Pa
         results_dir / f"qfi_dynamics_N={simulation_params.N}_B={float(simulation_params.B):.2f}.png", dpi=300)
 
 
-def parse_arguments() -> SimulationParams:
+def parse_arguments():
     """Parse command-line arguments for the
     simulation with config file support."""
     simulation_params = read_defaults_args_from_config()
@@ -710,23 +718,26 @@ def parse_arguments() -> SimulationParams:
         default=None,
         help="Initial state",
     )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Plot graph",
+    )
     args = parser.parse_args()
     simulation_params.N = args.system_size
     simulation_params.B = mp.mpf(f"{args.x_coupling}")
     simulation_params.run_arguments["init_state"] = args.init_state
-    return simulation_params
+    return simulation_params, args
 
 
 if __name__ == "__main__":
-    simulation_params = parse_arguments()
+    simulation_params, args = parse_arguments()
     if log_file_name := simulation_params.run_arguments.get("log_file"):
         log_handler = logging.FileHandler(
             Path(__file__).parent / simulation_params.run_arguments["output_dir"] / log_file_name)
     else:
         log_handler = logging.StreamHandler()
     setup_logging(log_handler)
-
-    logging.info(f"Run simulation with params: {simulation_params}")
     if state_str := simulation_params.run_arguments.get("init_state"):
         if state_str not in ["GS_phys", "GS_cat", "CatSum", "Phys"]:
             raise Exception("Wrong init_state! it should be one of init_state")
@@ -739,8 +750,28 @@ if __name__ == "__main__":
             InitialState.CAT_SUM,
         ]
     output_dir = Path(__file__).parent / simulation_params.run_arguments["output_dir"]
-    simulations = run_simulation(simulation_params, init_states)
 
-    for state, results in simulations.items():
-        output_file_name = f"{state}_N={simulation_params.N}_B={float(simulation_params.B):.2f}.csv"
-        save_to_file_qfi_dynamics(results=results, output_file=output_dir / output_file_name)
+    if args.plot:
+        logging.info("Plotting results")
+        simulations = dict()
+        for file in output_dir.iterdir():
+            if (file.is_file()
+                    and f"N={simulation_params.N}" in file.name
+                    and f"B={float(simulation_params.B):.2f}" in file.name):
+                match = re.search(r'\.([^.]+)_N=', file.name)
+                if match:
+                    logging.info(f"Adding file for plot {file.name}")
+                    initial_state = match.group(1)
+                    simulations[initial_state] = pd.read_csv(file)
+        if simulations:
+            plot(simulations, simulation_params, output_dir)
+        else:
+            logging.warning(f"Didn't find files in {output_dir}")
+
+    else:
+        logging.info(f"Run simulation with params: {simulation_params}")
+        simulations = run_simulation(simulation_params, init_states)
+
+        for state, results in simulations.items():
+            output_file_name = f"{state}_N={simulation_params.N}_B={float(simulation_params.B):.2f}.csv"
+            save_to_file_qfi_dynamics(results=results, output_file=output_dir / output_file_name)
