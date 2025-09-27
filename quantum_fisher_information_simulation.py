@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-import pandas as pd
-import logging
-import matplotlib.pyplot as plt
-import numpy as np
-import os
 import argparse
 import configparser
+import logging
+import matplotlib.pyplot as plt
+import mpmath as mp
+import numpy as np
+import os
+import pandas as pd
 
-from typing import Optional, Union
-from numpy import typing
+from dataclasses import dataclass
 from enum import Enum
 from itertools import chain
-from scipy.linalg import eigh, expm, eigvalsh_tridiagonal
-from dataclasses import dataclass
+from multiprocessing import Pool
+from numpy import typing
 from pathlib import Path
-import mpmath as mp
+from scipy.linalg import eigh, expm, eigvalsh_tridiagonal
+from typing import Optional, Union
 
 # Constants for state coefficients
 MP_MATH_PRECISION = 100
@@ -934,79 +935,43 @@ def observarble_simulation_optimal_with_AC_field(
         floquet_unitary_p2_delta_T
     )
     # # Create a pooled process to parallelize tasks
-    # with Pool() as pool:
-    #     args = [
-    #         (
-    #             time,
-    #             A,
-    #             n,
-    #             J,
-    #             phi,
-    #             h,
-    #             tau,
-    #             varphi,
-    #             theta,
-    #             phi_0,
-    #             nu,
-    #             epsilon,
-    #             steps_floquet_unitary,
-    #             H_0,
-    #             fu_eigenvalues,
-    #             fu_eigenvectors,
-    #             fu_delta_m_eigenvalues,
-    #             fu_delta_m_eigenvectors,
-    #             fu_delta_m2_eigenvalues,
-    #             fu_delta_m2_eigenvectors,
-    #             fu_delta_p_eigenvalues,
-    #             fu_delta_p_eigenvectors,
-    #             fu_delta_p2_eigenvalues,
-    #             fu_delta_p2_eigenvectors,
-    #             ket_0,
-    #             gs_mins_0,
-    #             gs_plus_0,
-    #             Zsum,
-    #             Xsum,
-    #             Ysum,
-    #         )
-    #         for time in time_interval
-    #     ]
-    #     results = pool.starmap(process_time_point, args, chunksize=100)
-    results = []
-    for time in time_interval:
-        res = process_time_point(
-            time,
-            A,
-            n,
-            J,
-            phi,
-            h,
-            tau,
-            varphi,
-            theta,
-            phi_0,
-            nu,
-            epsilon,
-            steps_floquet_unitary,
-            H_0,
-            fu_eigenvalues,
-            fu_eigenvectors,
-            fu_delta_m_eigenvalues,
-            fu_delta_m_eigenvectors,
-            fu_delta_m2_eigenvalues,
-            fu_delta_m2_eigenvectors,
-            fu_delta_p_eigenvalues,
-            fu_delta_p_eigenvectors,
-            fu_delta_p2_eigenvalues,
-            fu_delta_p2_eigenvectors,
-            ket_0,
-            gs_mins_0,
-            gs_plus_0,
-            Zsum,
-            Xsum,
-            Ysum,
-        )
-        results.append(res)
-
+    with Pool() as pool:
+        args = [
+            (
+                time,
+                A,
+                n,
+                J,
+                phi,
+                h,
+                tau,
+                varphi,
+                theta,
+                phi_0,
+                nu,
+                epsilon,
+                steps_floquet_unitary,
+                H_0,
+                fu_eigenvalues,
+                fu_eigenvectors,
+                fu_delta_m_eigenvalues,
+                fu_delta_m_eigenvectors,
+                fu_delta_m2_eigenvalues,
+                fu_delta_m2_eigenvectors,
+                fu_delta_p_eigenvalues,
+                fu_delta_p_eigenvectors,
+                fu_delta_p2_eigenvalues,
+                fu_delta_p2_eigenvectors,
+                ket_0,
+                gs_mins_0,
+                gs_plus_0,
+                Zsum,
+                Xsum,
+                Ysum,
+            )
+            for time in time_interval
+        ]
+        results = pool.starmap(process_time_point, args, chunksize=100)
     return results
 
 
@@ -1669,13 +1634,15 @@ def run_energy_levels_simulation(args):
     output_file = f"{args.output_dir}/general_case.png"
     init_states = [
         InitialState.PHYS,
-        # InitialState.GS_PHYS,
-        # InitialState.GS_CAT,
-        # InitialState.CAT_SUM,
+        InitialState.GS_PHYS,
+        InitialState.GS_CAT,
+        InitialState.CAT_SUM,
     ]
 
     for state in init_states:
-        time_interval = range(1, 100, 10)
+        time_interval = generate_time_interval(
+            args.time_points, args.points_per_range, csv_filename=output_file
+        )
         logging.info(
             f"Simulating for '{state}' state "
             f"for {len(time_interval)} points!"

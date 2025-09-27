@@ -4,6 +4,9 @@ import mpmath as mp
 from ..simulation_qfi_quspin import build_hamiltonian_lmg
 from ..mpmath_dependency_gaps import (
     create_v_operator as create_v_operator_mpmath,
+    calculate_unitary_T as calculate_unitary_T_mpmath,
+    create_spin_xyz_operators as create_spin_xyz_operators_mpmath,
+    create_kick_operator as create_kick_operator_mpmath,
     create_hamiltonian_h0 as create_hamiltonian_h0_mpmath)
 from scipy.linalg import eigh, expm
 
@@ -24,9 +27,9 @@ def h_ac(S_x, S_y, S_z, omega, phi_0, t_k, theta, varphi):
     sin_theta, cos_theta, sin_varphi, cos_varphi = _compute_constants(theta, varphi)
     # Calculate and return the AC field Hamiltonian
     return sinusoidal_factor * (
-        sin_theta * cos_varphi * S_x +
-        sin_theta * sin_varphi * S_y +
-        cos_theta * S_z
+            sin_theta * cos_varphi * S_x +
+            sin_theta * sin_varphi * S_y +
+            cos_theta * S_z
     )
 
 
@@ -121,7 +124,7 @@ def evalution_tau_step(
         steps_floquet_unitary,
         endpoint=True,
         dtype=np.complex128,
-        )
+    )
     for t_k in linspace:
         matrix = create_v_operator(
             H_0,
@@ -134,7 +137,6 @@ def evalution_tau_step(
             t_k,
             theta,
             varphi,
-            precision="np",
         )
         floquet_unitary = expm(
             -1j * t_delta * matrix
@@ -153,12 +155,11 @@ def calculate_unitary_T(
         nu,
         steps_floquet_unitary,
         H_0,
-        precision="np"
 ):
-    Zsum, Xsum, Ysum = create_spin_xyz_operators(n, precision=precision)
-    t_delta = tau / steps_floquet_unitary if precision == "np" else mp.mpf(tau / steps_floquet_unitary)
-    omega = 2.0 * np.pi / (nu * tau) if precision == "np" else mp.mpf(2.0 * mp.pi / (nu * tau))
-    floquet_unitary = np.eye(*H_0.shape, dtype=np.complex128) if precision == "np" else mp.eye(*H_0.shape)
+    Zsum, Xsum, Ysum = create_spin_xyz_operators(n)
+    t_delta = tau / steps_floquet_unitary
+    omega = 2.0 * np.pi / (nu * tau)
+    floquet_unitary = np.eye(*H_0.shape, dtype=np.complex128)
 
     for p in range(1, nu + 1):  # nu \tau = T
         floquet_unitary = evalution_tau_step(
@@ -176,12 +177,10 @@ def calculate_unitary_T(
             p,
             t_delta,
             steps_floquet_unitary,
-            precision=precision,
         )
-        floquet_unitary = (
-            create_kick_operator(phi, Xsum).dot(floquet_unitary) if precision == "np" else
-            create_kick_operator(phi, Xsum, precision="mpmath") * (floquet_unitary))
+        floquet_unitary = create_kick_operator(phi, Xsum).dot(floquet_unitary)
     return floquet_unitary
+
 
 def create_z_operator(n):
     """
@@ -314,6 +313,7 @@ def create_kick_operator(phi, s_x, precision=np.complex128):
     matrix = -1j * phi * s_x.astype(precision)
     return expm(matrix)
 
+
 def convert_mpmatrix_to_numpy(mp_math, precision=15):
     with mp.workdps(precision):
         np_mat = np.array(
@@ -321,6 +321,48 @@ def convert_mpmatrix_to_numpy(mp_math, precision=15):
             dtype=np.complex128
         )
     return np_mat
+
+@pytest.mark.parametrize("h", [0.0, 1e-6, 1e-2])
+@pytest.mark.parametrize("n", [2, 5, 10])
+@pytest.mark.parametrize("steps_floquet_unitary", [5, 15, 30])
+def test_floquet_unitary(h, n, steps_floquet_unitary):
+    J = 1.0
+    B = 0.45
+    phi = np.pi
+    T = 1.5
+    varphi = 0.01
+    theta = 0.01
+    nu = 2
+    phi_0 = 0.01
+    params = dict(J=J, B=B, phi=phi, T=T, varphi=varphi, h=h, n=n, nu=nu, phi_0=phi_0,
+                  steps_floquet_unitary=steps_floquet_unitary, theta=theta)
+    # expected
+    H0 = create_hamiltonian_h0(J, B, n)
+    floquet_unitary_T_expected = calculate_unitary_T(h, n, phi, T, varphi, theta,
+                                                     phi_0, nu, steps_floquet_unitary, H0, )
+    # calculated
+    H0_mpmath = create_hamiltonian_h0_mpmath(J, B, n)
+    floquet_unitary_T = calculate_unitary_T_mpmath(h, params, H0_mpmath)
+    assert np.allclose(convert_mpmatrix_to_numpy(floquet_unitary_T), floquet_unitary_T_expected)
+
+    E, ER = mp.eig(floquet_unitary_T)
+    ER_inv = mp.inverse(ER)
+    assert np.allclose(convert_mpmatrix_to_numpy(ER * mp.diag([e ** 5 for e in E]) * ER_inv),
+                       convert_mpmatrix_to_numpy(floquet_unitary_T ** 5))
+
+
+@pytest.mark.parametrize("phi", [0.123, 1.32, 12])
+@pytest.mark.parametrize("n", [2, 5, 10])
+def test_kick_operator_mpmath(n, phi):
+    Zsum, Xsum, Ysum = create_spin_xyz_operators(n)
+    Zsum_mp, Xsum_mp, Ysum_mp = create_spin_xyz_operators_mpmath(n)
+    kick_expected = create_kick_operator(phi, Xsum)
+    kick_mp = create_kick_operator_mpmath(phi, Xsum_mp)
+    assert np.allclose(convert_mpmatrix_to_numpy(kick_mp), kick_expected)
+    assert np.allclose(convert_mpmatrix_to_numpy(Zsum_mp), Zsum)
+    assert np.allclose(convert_mpmatrix_to_numpy(Xsum_mp), Xsum)
+    assert np.allclose(convert_mpmatrix_to_numpy(Ysum_mp), Ysum)
+
 
 @pytest.mark.parametrize("J, B, N", [
     pytest.param(1.0, 0.0, 1, id="no_B_field"),
@@ -344,6 +386,7 @@ def test_hamiltonian_mpmath(J, B, N):
     ham_expected = create_hamiltonian_h0(J, B, N)
     ham = create_hamiltonian_h0_mpmath(J, B, N)
     assert np.allclose(convert_mpmatrix_to_numpy(ham), ham_expected)
+
 
 @pytest.mark.parametrize("J, B, N", [
     pytest.param(1.0, 0.1, 6, id="base_case"),
