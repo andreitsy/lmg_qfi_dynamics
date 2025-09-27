@@ -5,6 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 import configparser
+import argparse
 
 from dataclasses import dataclass
 from enum import Enum
@@ -44,6 +45,11 @@ class SimulationParams:
     theta: mp.mpf = mp.mpf(0)
     freq: int = 2
     phi_0: mp.mpf = mp.mpf(0)
+
+    def __str__(self):
+        return (f"SimulationParams(N={self.N}, B={float(self.B)}, T={float(self.T)}, "
+                f"J={float(self.J)}, phi_kick_phase={float(self.phi_kick_phase)}, h={float(self.h)}) "
+                f"run with {self.run_arguments}")
 
 
 @dataclass
@@ -347,7 +353,7 @@ def process_time_point_mp(time: int, params: dict, H_0: mp.matrix,
     if DEBUG:
         abs_error_estimate = calculate_error_estimation_mp(dket_t, ket_t)
         if abs_error_estimate > 0.1:
-            print("ABS_ERROR:", abs_error_estimate)
+            logging.warning("ABS_ERROR:", abs_error_estimate)
 
     # Compute magnetizations
     m_x = mp.re((ket_t.transpose_conj() * Xsum * ket_t)[0, 0]) / N
@@ -402,7 +408,7 @@ def calculate_unitary_T(
     return floquet_unitary
 
 
-def simulation_with_AC_field_mp(params: dict, time_interval, init_state) -> List[QFIInformation]:
+def simulation_with_AC_field_mp(params: dict, time_interval, init_state, init_state_str: InitialState) -> List[QFIInformation]:
     """
     Sequential observable simulation using mpmath arbitrary precision
     """
@@ -424,7 +430,7 @@ def simulation_with_AC_field_mp(params: dict, time_interval, init_state) -> List
 
     # Sequentially process each time point
     results = []
-    for time in time_interval:
+    for i, time in enumerate(time_interval):
         res = process_time_point_mp(
             time,
             params,
@@ -437,17 +443,19 @@ def simulation_with_AC_field_mp(params: dict, time_interval, init_state) -> List
             Xsum,
             Ysum,
         )
+        if i % 10 == 0:
+            logging.info(f"Processing now time={time} for {init_state_str} with params: {params}")
         results.append(res)
 
     return results
 
 
-def setup_logging():
+def setup_logging(log_handler: logging.Handler):
     """Configure logging for the application."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler()],
+        handlers=[log_handler],
     )
 
 
@@ -474,7 +482,8 @@ def read_defaults_args_from_config() -> SimulationParams:
             {"dps": int(sim_config["dps"]),
              "steps_floquet_unitary": int(sim_config["steps-floquet-unitary"]),
              "num_points": int(sim_config["num-points"]),
-             "output_dir": files_config["output-dir"]},
+             "output_dir": files_config["output-dir"],
+             "log_file": files_config.get("log-file")},
             N=int(sim_config["n"]),
             J=convert_float_value(sim_config["j"]),
             B=convert_float_value(sim_config["b"]),
@@ -527,7 +536,7 @@ def generate_time_interval(num_points: int, max_degree: int) -> list:
     return time_interval
 
 
-def run_simulation(params: SimulationParams):
+def run_simulation(params: SimulationParams, init_states: List[InitialState]):
     dps = params.run_arguments["dps"]
     num_points = params.run_arguments["num_points"]
     params_dict = dict(phi=params.phi_kick_phase, J=params.J, B=params.B,
@@ -535,12 +544,6 @@ def run_simulation(params: SimulationParams):
                        varphi=params.varphi, phi_0=params.phi_0, theta=params.theta,
                        epsilon=mp.mpf(f"1e-{dps // 2}"),
                        steps_floquet_unitary=params.run_arguments["steps_floquet_unitary"])
-    init_states = [
-        InitialState.PHYS,
-        InitialState.GS_PHYS,
-        InitialState.GS_CAT,
-        InitialState.CAT_SUM,
-    ]
 
     with mp.workdps(dps):
         vec_size = params.N + 1
@@ -573,7 +576,8 @@ def run_simulation(params: SimulationParams):
             sim_results = simulation_with_AC_field_mp(
                 params=params_dict,
                 time_interval=generate_time_interval(num_points, last_time_degree),
-                init_state=init_state)
+                init_state=init_state,
+                init_state_str=state)
             results[state] = sim_results
     return results
 
@@ -672,12 +676,69 @@ def plot(simulations: dict, simulation_params: SimulationParams, results_dir: Pa
     plt.savefig(
         results_dir / f"qfi_dynamics_N={simulation_params.N}_B={float(simulation_params.B):.2f}.png", dpi=300)
 
-if __name__ == "__main__":
+
+def parse_arguments() -> SimulationParams:
+    """Parse command-line arguments for the
+    simulation with config file support."""
     simulation_params = read_defaults_args_from_config()
+    # Now set up argument parser with defaults from config
+    parser = argparse.ArgumentParser(
+        description="Quantum Fisher Information Simulation Tool.\n"
+        "Running the script from command line would look "
+        "something like this:\n"
+        "`python ./quantum_fisher_information_simulation.py "
+        "--amplitude 0.0 --plot-type all`"
+    )
+    # Add arguments with defaults from config file or built-in defaults
+    parser.add_argument(
+        "--x-coupling",
+        type=float,
+        default=simulation_params.B,
+        help="X Coupling",
+    )
+    parser.add_argument(
+        "--system-size",
+        type=int,
+        default=simulation_params.N,
+        help="System size",
+    )
+    parser.add_argument(
+        "--init-state",
+        type=str,
+        default=None,
+        help="Initial state",
+    )
+    args = parser.parse_args()
+    simulation_params.N = args.system_size
+    simulation_params.B = mp.mpf(f"{args.x_coupling}")
+    simulation_params.run_arguments["init_state"] = args.init_state
+    return simulation_params
+
+
+if __name__ == "__main__":
+    simulation_params = parse_arguments()
+    if log_file_name := simulation_params.run_arguments.get("log_file"):
+        log_handler = logging.FileHandler(
+            Path(__file__).parent / simulation_params.run_arguments["output_dir"] / log_file_name)
+    else:
+        log_handler = logging.StreamHandler()
+    setup_logging(log_handler)
+
+    logging.info(f"Run simulation with params: {simulation_params}")
+    if state_str := simulation_params.run_arguments.get("init_state"):
+        if state_str not in ["GS_phys", "GS_cat", "CatSum", "Phys"]:
+            raise Exception("Wrong init_state! it should be one of init_state")
+        init_states = [InitialState(state_str)]
+    else:
+        init_states = [
+            InitialState.PHYS,
+            InitialState.GS_PHYS,
+            InitialState.GS_CAT,
+            InitialState.CAT_SUM,
+        ]
     output_dir = Path(__file__).parent / simulation_params.run_arguments["output_dir"]
-    simulations = run_simulation(simulation_params)
+    simulations = run_simulation(simulation_params, init_states)
 
     for state, results in simulations.items():
         output_file_name = f"{state}_N={simulation_params.N}_B={float(simulation_params.B):.2f}.csv"
         save_to_file_qfi_dynamics(results=results, output_file=output_dir / output_file_name)
-    plot(simulations, simulation_params, output_dir)
