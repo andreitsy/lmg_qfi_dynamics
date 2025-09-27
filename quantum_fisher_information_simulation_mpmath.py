@@ -410,7 +410,8 @@ def calculate_unitary_T(
     return floquet_unitary
 
 
-def simulation_with_AC_field_mp(params: dict, time_interval, init_state, init_state_str: InitialState) -> List[QFIInformation]:
+def simulation_with_AC_field_mp(params: dict, time_interval,
+                                init_state, init_state_str: InitialState) -> List[QFIInformation]:
     """
     Sequential observable simulation using mpmath arbitrary precision
     """
@@ -665,19 +666,20 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
             pairs[pair_num] = []
         pairs[pair_num].append(float(eigenvalue))
     for pair_idx, energies in pairs.items():
-        if energies[0] <= symmetry_edge and pair_idx < 7: # no more than 7
+        if energies[0] <= symmetry_edge and pair_idx < 7:  # no more than 7
             if len(energies) == 2:
                 gap = abs(energies[1] - energies[0])
                 ax.axvline(x=2 * np.pi / gap, color='black',
                            linestyle='--', alpha=0.7, linewidth=2)
                 # Adding the annotation with value 1/Δ
                 ax.annotate(
-                    f"$\\frac{{2\\pi}}{{\\Delta_{{{pair_idx+1}\\overline{{{pair_idx+1}}}}}}}$",
+                    f"$\\frac{{2\\pi}}{{\\Delta_{{{pair_idx + 1}\\overline{{{pair_idx + 1}}}}}}}$",
                     xy=(2 * np.pi / gap, Y_LABEL_COORDINATE),
                     xytext=(2 * np.pi / gap * 1.03, Y_LABEL_COORDINATE),
                     fontsize=54,
                     color='black'
                 )
+
 
 def plot(simulations: dict, simulation_params: SimulationParams, results_dir: Path):
     fig, ax = plt.subplots(figsize=(15, 10))
@@ -694,10 +696,10 @@ def parse_arguments():
     # Now set up argument parser with defaults from config
     parser = argparse.ArgumentParser(
         description="Quantum Fisher Information Simulation Tool.\n"
-        "Running the script from command line would look "
-        "something like this:\n"
-        "`python ./quantum_fisher_information_simulation.py "
-        "--amplitude 0.0 --plot-type all`"
+                    "Running the script from command line would look "
+                    "something like this:\n"
+                    "`python ./quantum_fisher_information_simulation.py "
+                    "--amplitude 0.0 --plot-type all`"
     )
     # Add arguments with defaults from config file or built-in defaults
     parser.add_argument(
