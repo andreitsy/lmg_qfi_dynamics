@@ -22,7 +22,7 @@ mpl.rcParams["text.latex.preamble"] = r"\usepackage{amsmath,amsfonts,amssymb}"
 
 MAX_TIME_POW_PLOT = None
 DEBUG = True
-Y_LABEL_COORDINATE = 0.16
+Y_LABEL_COORDINATE = 0.17
 _logger_initialized = False
 
 
@@ -71,7 +71,7 @@ class UF:
 
 
 def dketa_t(ket_t_p_delta, ket_t_m_delta, delta):
-    return (ket_t_p_delta - ket_t_m_delta) / (2.0 * mp.mpf(delta))
+    return (ket_t_p_delta - ket_t_m_delta) / (2.0 * delta)
 
 
 def quantum_fisher_information_mp(dketa_t, ket_t):
@@ -568,7 +568,7 @@ def run_simulation(params: SimulationParams, init_states: List[InitialState]):
         results = dict()
         for state in init_states:
             if state == InitialState.GS_PHYS:
-                init_state = (ground_state + first_excited_state) / mp.sqrt(2)
+                init_state = ground_state + first_excited_state
             elif state == InitialState.GS_CAT:
                 init_state = ground_state
             elif state == InitialState.PHYS:
@@ -578,11 +578,11 @@ def run_simulation(params: SimulationParams, init_states: List[InitialState]):
             elif state == InitialState.CAT_SUM:
                 # superposition of up and down states
                 init_state = mp.zeros(vec_size, 1)
-                init_state[0] = mp.mpf('1.0') / mp.sqrt(2)
-                init_state[-1] = mp.mpf('1.0') / mp.sqrt(2)
+                init_state[0] = mp.mpf('1.0')
+                init_state[vec_size-1] = mp.mpf('1.0')
             else:
                 raise ValueError(f"Unhandled initial state type: {init_state}")
-
+            init_state = init_state / mp.norm(init_state)
             sim_results = simulation_with_AC_field_mp(
                 params=params_dict,
                 time_interval=generate_time_interval(num_points, last_time_degree),
@@ -626,20 +626,25 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
                       if raw.qfi > 0 else 0 for raw in simulations[state].itertuples(index=True)]
         # Labels for each state
         if state == "GS_PHYS":
+            cor = "tab:red"
             label = (r"$\left(\big|E_1 {\bigr \rangle} + "
                      r"\big|E_{\overline{1}} {\bigr \rangle} \right) / \sqrt{2}$")
         elif state == "GS_CAT":
+            cor = "tab:green"
             label = r"$\big|E_1 {\bigr \rangle} $"
         elif state == "PHYS":
+            cor = "tab:orange"
             label = r"$\big|\uparrow ... \uparrow {\bigr \rangle}$"
         elif state == "CAT_SUM":
+            cor = "tab:blue"
             label = (r"$\left(\big|\uparrow ... \uparrow {\bigr \rangle} + "
                      r"\big|\downarrow ... \downarrow {\bigr \rangle} "
                      r"\right)/\sqrt{2}$")
         else:
+            cor = "b"
             label = state
         # Plot QFI data
-        ax.plot(time_points, qfi_values, "-", label=label, linewidth=3)
+        ax.plot(time_points, qfi_values, "-", label=label, linewidth=3, color=cor)
     # Customize QFI subplot
     ax.set_title(
         rf"QFI dynamics for $N={simulation_params.N}, B/J={float(simulation_params.B / simulation_params.J):.2f}$",
