@@ -2,8 +2,8 @@ import pytest
 import numpy as np
 import mpmath as mp
 from ..simulation_qfi_quspin import build_hamiltonian_lmg
-from ..mpmath_dependency_gaps import (
-    create_v_operator as create_v_operator_mpmath,
+from ..quantum_fisher_information_simulation_mpmath import (
+    generate_time_interval,
     calculate_unitary_T as calculate_unitary_T_mpmath,
     create_spin_xyz_operators as create_spin_xyz_operators_mpmath,
     create_kick_operator as create_kick_operator_mpmath,
@@ -334,7 +334,7 @@ def test_floquet_unitary(h, n, steps_floquet_unitary):
     theta = 0.01
     nu = 2
     phi_0 = 0.01
-    params = dict(J=J, B=B, phi=phi, T=T, varphi=varphi, h=h, n=n, nu=nu, phi_0=phi_0,
+    params = dict(J=J, B=B, phi=phi, T=T, varphi=varphi, h=h, N=n, nu=nu, phi_0=phi_0,
                   steps_floquet_unitary=steps_floquet_unitary, theta=theta)
     # expected
     H0 = create_hamiltonian_h0(J, B, n)
@@ -397,7 +397,12 @@ def test_eigenvalues(J, B, N):
     ham_expected = create_hamiltonian_h0(J, B, N)
     eigenvalues_expected, eigvecs_expected = (
         eigh(ham_expected, check_finite=False, eigvals_only=False))
-    ham = build_hamiltonian_lmg(J, B)
+    ham = build_hamiltonian_lmg(N, J, B)
     eigenvalues, eigvecs = ham.eigh()
     assert np.allclose(eigenvalues, eigenvalues_expected)
     assert np.allclose(eigvecs, eigvecs_expected)
+
+def test_generate_time_interval():
+    interval = generate_time_interval(10, 5)
+    for i in range(1, len(interval)):
+        assert interval[i-1] < interval[i]

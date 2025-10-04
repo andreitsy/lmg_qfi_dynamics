@@ -3,8 +3,8 @@
 # Exit on any error
 set -e
 
-x_coupling_values=( 0.3 0.5 )
-n_values=( 15 30 45 )
+x_coupling_values=( 0.2 )
+n_values=( 20 )
 states=("GS_phys" "GS_cat" "CatSum" "Phys")
 
 trap 'echo "🛑 Ctrl-C caught, killing children..."; kill 0' INT

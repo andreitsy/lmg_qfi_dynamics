@@ -61,6 +61,7 @@ class QFIInformation:
     m_z: float
     qfi: float
     time: float
+    qfi_raw_value: str
 
 
 @dataclass
@@ -334,7 +335,7 @@ def calculate_error_estimation_mp(dket_t, ket_t):
 def process_time_point_mp(time: int, params: dict, H_0: mp.matrix,
                           floque_u: UF, floque_u_p: UF, floque_u_m: UF, init_state: mp.matrix,
                           Zsum: mp.matrix, Xsum: mp.matrix, Ysum: mp.matrix,
-                          ):
+                          ) -> QFIInformation:
     """
     Compute observables and QFI at a given time point using mpmath arbitrary precision.
     """
@@ -355,7 +356,7 @@ def process_time_point_mp(time: int, params: dict, H_0: mp.matrix,
     if DEBUG:
         abs_error_estimate = calculate_error_estimation_mp(dket_t, ket_t)
         if abs_error_estimate > 0.1:
-            logging.warning("ABS_ERROR:", abs_error_estimate)
+            logging.warning("ABS_ERROR: %f", abs_error_estimate)
 
     # Compute magnetizations
     m_x = mp.re((ket_t.transpose_conj() * Xsum * ket_t)[0, 0]) / N
@@ -363,7 +364,8 @@ def process_time_point_mp(time: int, params: dict, H_0: mp.matrix,
     m_z = mp.re((ket_t.transpose_conj() * Zsum * ket_t)[0, 0]) / N
 
     return QFIInformation(
-        qfi=float(qfi),
+        qfi_raw_value=str(qfi),
+        qfi=float(qfi / (N **2 * time**2)),
         time=time,
         m_x=float(m_x),
         m_y=float(m_y),
@@ -535,8 +537,9 @@ def run_gaps():
 def generate_time_interval(num_points: int, max_degree: int) -> list:
     if max_degree <= 1:
         raise ValueError("max_degree should be greater than 1!")
-    time_interval = (list(range(1, 10)) +
-                     [int(x) for x in np.logspace(1, max_degree, num_points, endpoint=True)])
+    time_interval = (list(range(1, 100)) +
+                     [int(x) for x in np.logspace(2, 4, num_points, endpoint=False)] +
+                     [int(x) for x in np.logspace(4, max_degree, num_points, endpoint=True)])
     logging.info(f"Time interval is: {time_interval[0]} to {time_interval[-1]}")
     return time_interval
 
@@ -603,6 +606,7 @@ def save_to_file_qfi_dynamics(
         "m_y": [],
         "m_z": [],
         "qfi": [],
+        "qfi_raw": [],
     }
     for result in results:
         csv_data["time"].append(result.time)
@@ -610,6 +614,7 @@ def save_to_file_qfi_dynamics(
         csv_data["m_y"].append(result.m_y)
         csv_data["m_z"].append(result.m_z)
         csv_data["qfi"].append(result.qfi)
+        csv_data["qfi_raw"].append(result.qfi_raw_value)
 
     df = pd.DataFrame(csv_data)
     df.to_csv(output_file, index=False)
@@ -620,10 +625,9 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
     # Loop through different initial state groups in QFI data
     last_time = -1
     for state in simulations:
-        time_points = simulations[state]["time"].tolist()
+        time_points = [float(mp.log10(mp.mpf(x))) for x in simulations[state]["time"].tolist()]
         last_time = max(time_points[-1], last_time)
-        qfi_values = [abs(raw.qfi) / (simulation_params.N * raw.time) ** 2
-                      if raw.qfi > 0 else 0 for raw in simulations[state].itertuples(index=True)]
+        qfi_values = [float(x) for x in simulations[state]["qfi"].tolist()]
         # Labels for each state
         if state == "GS_PHYS":
             cor = "tab:red"
@@ -651,36 +655,35 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
         fontsize=40)
     ax.set_xlabel(r"$t / T$", fontsize=40)
     ax.set_ylabel(r"$F_h / (N t)^2$", fontsize=40)
-    ax.set_xscale("log")  # Logarithmic scale for time
     ax.set_ylim([0, np.abs((1 - float(simulation_params.B) ** 2) * 4 / np.pi ** 2)])
     if max_time_pow is None:
-        max_time_pow = int(np.log10(last_time)) + 1
-    ax.set_xticks([10 ** n for n in range(1, max_time_pow, 2)])
+        max_time_pow = int(last_time) + 1
+    x_ticks_pow = [n for n in range(1, max_time_pow, 2)]
+    ax.set_xticks(x_ticks_pow, [rf"$10^{{{i}}}$" for i in x_ticks_pow])
     ax.tick_params(axis="x", labelsize=30)  # Adjust x-axis tick label font size
     ax.tick_params(axis="y", labelsize=30)  # Adjust y-axis tick label font size
     ax.grid(True, linestyle="--", alpha=0.6, linewidth=1.7)
     H = create_hamiltonian_h0(simulation_params.J, simulation_params.B, simulation_params.N)
-    symmetry_edge = -1 * float(simulation_params.B) * simulation_params.N
+    symmetry_edge = mp.mpf(-1 * simulation_params.B * simulation_params.N)
     eigvals_H_real, evecs = mp.eigh(H)
     # Add vertical lines for gap points
     pairs = {}
     for idx, eigenvalue_mp in enumerate(eigvals_H_real):
-        eigenvalue = float(eigenvalue_mp)
         pair_num = idx // 2
         if pair_num not in pairs:
             pairs[pair_num] = []
-        pairs[pair_num].append(float(eigenvalue))
+        pairs[pair_num].append(eigenvalue_mp)
     for pair_idx, energies in pairs.items():
         if energies[0] <= symmetry_edge and pair_idx < 7:  # no more than 7
             if len(energies) == 2:
-                gap = abs(energies[1] - energies[0])
-                ax.axvline(x=2 * np.pi / gap, color='black',
+                time_gap = float(mp.log10(2 * mp.pi / mp.fabs(energies[1] - energies[0])))
+                ax.axvline(x=time_gap, color='black',
                            linestyle='--', alpha=0.7, linewidth=2)
                 # Adding the annotation with value 1/Δ
                 ax.annotate(
                     f"$\\frac{{2\\pi}}{{\\Delta_{{{pair_idx + 1}\\overline{{{pair_idx + 1}}}}}}}$",
-                    xy=(2 * np.pi / gap, Y_LABEL_COORDINATE),
-                    xytext=(2 * np.pi / gap * 1.03, Y_LABEL_COORDINATE),
+                    xy=(time_gap, Y_LABEL_COORDINATE),
+                    xytext=(time_gap * 1.03, Y_LABEL_COORDINATE),
                     fontsize=54,
                     color='black'
                 )
