@@ -1,18 +1,19 @@
-import mpmath as mp
-import logging
-import matplotlib.pyplot as plt
-import os
-import re
-import numpy as np
-import pandas as pd
-import configparser
 import argparse
+import configparser
+import logging
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import mpmath as mp
+import numpy as np
+import os
+import pandas as pd
+import re
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List
 from pathlib import Path
-import matplotlib as mpl
+from scipy.ndimage import gaussian_filter
+from typing import List
 
 mp.dps = 100
 mpl.rcParams["text.usetex"] = True
@@ -628,6 +629,7 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
         time_points = [float(mp.log10(mp.mpf(x))) for x in simulations[state]["time"].tolist()]
         last_time = max(time_points[-1], last_time)
         qfi_values = [float(x) for x in simulations[state]["qfi"].tolist()]
+        qfi_values[:1000] = gaussian_filter(qfi_values[:1000], sigma=1.5)
         # Labels for each state
         if state == "GS_PHYS":
             cor = "tab:red"
@@ -655,6 +657,10 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
         fontsize=40)
     ax.set_xlabel(r"$t / T$", fontsize=40)
     ax.set_ylabel(r"$F_h / (N t)^2$", fontsize=40)
+    # plot legend
+    ax.legend(
+        title="Initial State", loc=(0.43, 0.55), fontsize=28, title_fontsize=26
+    ).set_zorder(10)
     ax.set_ylim([0, np.abs((1 - float(simulation_params.B) ** 2) * 4 / np.pi ** 2)])
     if max_time_pow is None:
         max_time_pow = int(last_time) + 1
