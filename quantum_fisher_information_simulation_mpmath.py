@@ -23,7 +23,7 @@ mpl.rcParams["text.latex.preamble"] = r"\usepackage{amsmath,amsfonts,amssymb}"
 
 MAX_TIME_POW_PLOT = None
 DEBUG = True
-Y_LABEL_COORDINATE = 0.17
+Y_LABEL_COORDINATE = 0.155
 _logger_initialized = False
 
 
@@ -659,7 +659,7 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
     ax.set_ylabel(r"$F_h / (N t)^2$", fontsize=40)
     # plot legend
     ax.legend(
-        title="Initial State", loc=(0.43, 0.55), fontsize=28, title_fontsize=26
+        title="Initial State", loc=(0.35, 0.567), fontsize=28, title_fontsize=26
     ).set_zorder(10)
     ax.set_ylim([0, np.abs((1 - float(simulation_params.B) ** 2) * 4 / np.pi ** 2)])
     if max_time_pow is None:
