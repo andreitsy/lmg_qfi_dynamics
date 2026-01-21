@@ -4,7 +4,7 @@
 set -e
 
 x_coupling_values=( 0.4 )
-n_values=( 40 )
+n_values=( 5 )
 states=("GS_phys" "GS_cat" "CatSum" "Phys")
 
 trap 'echo "🛑 Ctrl-C caught, killing children..."; kill 0' INT

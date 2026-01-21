@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import mpmath as mp
-from ..quantum_fisher_information_simulation_mpmath import (
+from lmg_qfi import (
     generate_time_interval,
     calculate_unitary_T as calculate_unitary_T_mpmath,
     create_spin_xyz_operators as create_spin_xyz_operators_mpmath,
