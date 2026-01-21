@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lmg_qfi"
+version = "0.1.0"
+description = "QFI dynamics in LMG Model"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mpmath",
+    "numpy",
+    "matplotlib",
+    "pandas",
+    "scipy",
+    "sympy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ipython",
+    "jupyterlab",
+]
+qiskit = [
+    "qiskit",
+    "qiskit-ibm-runtime",
+]
+quspin = [
+    "quspin",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["lmg_qfi"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ipython",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
