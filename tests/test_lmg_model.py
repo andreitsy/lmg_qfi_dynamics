@@ -6,7 +6,13 @@ from lmg_qfi import (
     calculate_unitary_T as calculate_unitary_T_mpmath,
     create_spin_xyz_operators as create_spin_xyz_operators_mpmath,
     create_kick_operator as create_kick_operator_mpmath,
-    create_hamiltonian_h0 as create_hamiltonian_h0_mpmath)
+    create_hamiltonian_h0 as create_hamiltonian_h0_mpmath,
+    dketa_t,
+    quantum_fisher_information_mp,
+    calculate_error_estimation_mp,
+    find_power_r_mpmath,
+    UF,
+)
 from scipy.linalg import expm
 
 # suppress=True avoids scientific notation for small numbers
@@ -380,3 +386,52 @@ def test_generate_time_interval():
     interval = generate_time_interval(10, 5)
     for i in range(1, len(interval)):
         assert interval[i - 1] < interval[i]
+
+
+def test_generate_time_interval_invalid_degree():
+    with pytest.raises(ValueError):
+        generate_time_interval(5, 1)
+
+
+def test_dketa_t_central_difference():
+    ket_t_p_delta = mp.matrix([[3], [5]])
+    ket_t_m_delta = mp.matrix([[1], [1]])
+    derivative = dketa_t(ket_t_p_delta, ket_t_m_delta, mp.mpf(1))
+    expected = mp.matrix([[1], [2]])
+    assert np.allclose(
+        convert_mpmatrix_to_numpy(derivative),
+        convert_mpmatrix_to_numpy(expected),
+    )
+
+
+def test_quantum_fisher_information_mp_simple_case():
+    ket_t = mp.matrix([[1], [0]])
+    dketa = mp.matrix([[0], [1]])
+    qfi = float(quantum_fisher_information_mp(dketa, ket_t))
+    assert qfi == pytest.approx(4.0)
+
+
+def test_calculate_error_estimation_mp_is_zero_for_orthogonal_vectors():
+    ket_t = mp.matrix([[1], [0]])
+    dket_t = mp.matrix([[0], [1]])
+    error = calculate_error_estimation_mp(dket_t, ket_t)
+    assert error == pytest.approx(0.0)
+
+
+def test_find_power_r_mpmath_identity_and_power():
+    eigenvalues = [mp.mpf(2), mp.mpf(0.5)]
+    U = mp.eye(2)
+    floque_u = UF(eigenvalues=eigenvalues, U=U, U_inv=U)
+
+    identity = find_power_r_mpmath(floque_u, 0)
+    assert np.allclose(
+        convert_mpmatrix_to_numpy(identity),
+        np.eye(2),
+    )
+
+    powered = find_power_r_mpmath(floque_u, 3)
+    expected = np.diag([2 ** 3, 0.5 ** 3])
+    assert np.allclose(
+        convert_mpmatrix_to_numpy(powered),
+        expected,
+    )
