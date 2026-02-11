@@ -39,4 +39,5 @@ def save_to_file_qfi_dynamics(
         csv_data["qfi_raw"].append(result.qfi_raw_value)
 
     df = pd.DataFrame(csv_data)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_file, index=False)
