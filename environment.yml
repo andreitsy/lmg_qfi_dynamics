@@ -1,0 +1,6 @@
+name: lmg_qfi
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.14

@@ -12,12 +12,12 @@ Simulation of Quantum Fisher Information dynamics in the Lipkin-Meshkov-Glick mo
 ## Installation
 
 Requires [uv](https://docs.astral.sh/uv/):
-
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+conda env create -f environment.yml
+# activate env 
+conda activate lmg_qfi
 uv sync
 ```
-
 
 ## Usage
 
