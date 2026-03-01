@@ -49,6 +49,14 @@ class QFIInformation:
 
 
 @dataclass
+class SLDInformation:
+    time: float
+    L_expectation: float          # <L> — ~0 for normalized states
+    L_squared_expectation: float  # <L^2> = raw QFI from SLD
+    qfi_from_sld: float           # <L^2> / (N^2 t^2), normalized QFI
+
+
+@dataclass
 class UF:
     """Floquet unitary decomposition."""
     eigenvalues: mp.matrix
