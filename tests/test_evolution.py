@@ -8,6 +8,7 @@ from lmg_qfi import (
     find_power_r_mpmath,
     evalution_T_step,
     calculate_unitary_T,
+    calculate_unitary_at_time_mp,
     create_spin_xyz_operators,
     create_hamiltonian_h0,
     UF,
@@ -261,8 +262,103 @@ class TestCalculateUnitaryT:
             steps_floquet_unitary=20,
             theta=mp.mpf(0.1),
         )
-        
+
         U_T = calculate_unitary_T(mp.mpf(0.1), params, H_0)
         det = mp.det(U_T)
-        
+
         assert mp.fabs(mp.fabs(det) - 1) < 1e-8
+
+
+def _make_floque_u(h, params, H_0):
+    """Helper: compute Floquet unitary and return UF decomposition."""
+    U = calculate_unitary_T(h, params, H_0)
+    eigenvalues, eigenvectors = mp.eig(U)
+    return UF(
+        eigenvalues=eigenvalues,
+        U=eigenvectors,
+        U_inv=mp.inverse(eigenvectors),
+    )
+
+
+class TestCalculateUnitaryAtTimeMp:
+    """Tests for calculate_unitary_at_time_mp."""
+
+    def _base_params(self, n, nu=2):
+        return dict(
+            J=mp.mpf(1.0),
+            B=mp.mpf(0.4),
+            phi=mp.pi,
+            T=mp.mpf(1.0),
+            varphi=mp.mpf(0.0),
+            h=mp.mpf(0.0),
+            N=n,
+            nu=nu,
+            phi_0=mp.mpf(0.0),
+            steps_floquet_unitary=20,
+            theta=mp.mpf(0.0),
+        )
+
+    @pytest.mark.parametrize("n", [2, 5])
+    def test_at_time_zero_returns_identity(self, n):
+        """U(0) = identity (no evolution)."""
+        params = self._base_params(n)
+        H_0 = create_hamiltonian_h0(1.0, 0.4, n)
+        h = mp.mpf(0.0)
+        floque_u = _make_floque_u(h, params, H_0)
+
+        result = calculate_unitary_at_time_mp(h, 0, params, H_0, floque_u)
+        result_np = convert_mpmatrix_to_numpy(result)
+
+        assert np.allclose(result_np, np.eye(n + 1))
+
+    @pytest.mark.parametrize("n", [2, 5])
+    @pytest.mark.parametrize("nu", [1, 2, 3])
+    def test_at_time_nu_equals_unitary_T(self, n, nu):
+        """U(nu) = U_T (one complete Floquet period)."""
+        params = self._base_params(n, nu=nu)
+        H_0 = create_hamiltonian_h0(1.0, 0.4, n)
+        h = mp.mpf(0.0)
+        floque_u = _make_floque_u(h, params, H_0)
+
+        U_T = calculate_unitary_T(h, params, H_0)
+        result = calculate_unitary_at_time_mp(h, nu, params, H_0, floque_u)
+
+        result_np = convert_mpmatrix_to_numpy(result)
+        U_T_np = convert_mpmatrix_to_numpy(U_T)
+
+        assert np.allclose(result_np, U_T_np, atol=1e-8)
+
+    @pytest.mark.parametrize("n", [2, 5])
+    @pytest.mark.parametrize("time", [1, 2, 4, 5])
+    def test_result_is_unitary(self, n, time):
+        """U(t) is unitary for any time."""
+        params = self._base_params(n, nu=2)
+        H_0 = create_hamiltonian_h0(1.0, 0.4, n)
+        h = mp.mpf(0.1)
+        params["h"] = h
+        floque_u = _make_floque_u(h, params, H_0)
+
+        result = calculate_unitary_at_time_mp(h, time, params, H_0, floque_u)
+        result_np = convert_mpmatrix_to_numpy(result)
+
+        product = result_np @ result_np.T.conj()
+        assert np.allclose(product, np.eye(n + 1), atol=1e-6)
+
+    @pytest.mark.parametrize("n", [2, 5])
+    def test_at_time_2nu_equals_unitary_T_squared(self, n):
+        """U(2*nu) = U_T^2."""
+        nu = 2
+        params = self._base_params(n, nu=nu)
+        H_0 = create_hamiltonian_h0(1.0, 0.4, n)
+        h = mp.mpf(0.0)
+        floque_u = _make_floque_u(h, params, H_0)
+
+        U_T = calculate_unitary_T(h, params, H_0)
+        U_T_sq = U_T * U_T
+
+        result = calculate_unitary_at_time_mp(h, 2 * nu, params, H_0, floque_u)
+
+        result_np = convert_mpmatrix_to_numpy(result)
+        U_T_sq_np = convert_mpmatrix_to_numpy(U_T_sq)
+
+        assert np.allclose(result_np, U_T_sq_np, atol=1e-6)

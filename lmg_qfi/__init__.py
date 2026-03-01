@@ -15,6 +15,7 @@ from .config import (
     InitialState,
     SimulationParams,
     QFIInformation,
+    SLDInformation,
     UF,
     read_defaults_args_from_config,
     parse_arguments,
@@ -61,6 +62,13 @@ from .plotting import (
     Y_LABEL_COORDINATE,
 )
 
+from .sld import (
+    compute_sld_matrix,
+    sld_expectation,
+    sld_squared_expectation,
+    compute_sld_info,
+)
+
 from .utils import (
     log_message,
     setup_logging,
@@ -71,6 +79,7 @@ __all__ = [
     "InitialState",
     "SimulationParams",
     "QFIInformation",
+    "SLDInformation",
     "UF",
     "read_defaults_args_from_config",
     "parse_arguments",
@@ -105,6 +114,11 @@ __all__ = [
     "plot",
     "MAX_TIME_POW_PLOT",
     "Y_LABEL_COORDINATE",
+    # SLD
+    "compute_sld_matrix",
+    "sld_expectation",
+    "sld_squared_expectation",
+    "compute_sld_info",
     # Utils
     "log_message",
     "setup_logging",
