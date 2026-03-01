@@ -7,7 +7,7 @@ import numpy as np
 from typing import List
 
 from .config import InitialState, SimulationParams, QFIInformation, UF
-from .operators import create_spin_xyz_operators, create_hamiltonian_h0
+from .operators import create_spin_xyz_operators, create_hamiltonian_h0, create_kick_operator, compute_trig_cache
 from .evolution import calculate_unitary_T
 from .qfi import process_time_point_mp
 
@@ -66,15 +66,22 @@ def simulation_with_AC_field_mp(
     epsilon = params["epsilon"]
     Zsum, Xsum, Ysum = create_spin_xyz_operators(params["N"])
     H_0 = create_hamiltonian_h0(params["J"], params["B"], params["N"])
+    kick_op = create_kick_operator(params["phi"], Xsum)
+    trig_cache = compute_trig_cache(params["theta"], params["varphi"])
+    t_delta = mp.mpf(params["T"]) / params["steps_floquet_unitary"]
+    omega = mp.mpf(2) * mp.pi / mp.mpf(params["nu"] * params["T"])
 
-    fu_eigenvalues, fu_eigenvectors = mp.eig(calculate_unitary_T(h, params, H_0))
+    fu_eigenvalues, fu_eigenvectors = mp.eig(calculate_unitary_T(h, params, H_0,
+                                             kick_op=kick_op, trig_cache=trig_cache))
     floque_u = UF(eigenvalues=fu_eigenvalues, U=fu_eigenvectors, U_inv=mp.inverse(fu_eigenvectors))
 
-    fu_delta_p_eigenvalues, fu_delta_p_eigenvectors = mp.eig(calculate_unitary_T(h + epsilon, params, H_0))
+    fu_delta_p_eigenvalues, fu_delta_p_eigenvectors = mp.eig(calculate_unitary_T(h + epsilon, params, H_0,
+                                                             kick_op=kick_op, trig_cache=trig_cache))
     floque_u_p = UF(eigenvalues=fu_delta_p_eigenvalues,
                     U=fu_delta_p_eigenvectors, U_inv=mp.inverse(fu_delta_p_eigenvectors))
 
-    fu_delta_m_eigenvalues, fu_delta_m_eigenvectors = mp.eig(calculate_unitary_T(h - epsilon, params, H_0))
+    fu_delta_m_eigenvalues, fu_delta_m_eigenvectors = mp.eig(calculate_unitary_T(h - epsilon, params, H_0,
+                                                             kick_op=kick_op, trig_cache=trig_cache))
     floque_u_m = UF(eigenvalues=fu_delta_m_eigenvalues,
                     U=fu_delta_m_eigenvectors, U_inv=mp.inverse(fu_delta_m_eigenvectors))
 
@@ -91,6 +98,10 @@ def simulation_with_AC_field_mp(
             Zsum,
             Xsum,
             Ysum,
+            kick_op=kick_op,
+            trig_cache=trig_cache,
+            t_delta=t_delta,
+            omega=omega,
         )
         if i % 10 == 0:
             logging.info(f"{i / len(time_interval) * 100.0:.2f}%: "
