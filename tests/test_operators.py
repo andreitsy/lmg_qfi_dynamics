@@ -150,15 +150,48 @@ class TestSpinXYZOperators:
     def test_casimir_operator(self, n):
         """Test S^2 = Sx^2 + Sy^2 + Sz^2 = s(s+1)*I where s = n/2."""
         Sz, Sx, Sy = create_spin_xyz_operators(n)
-        
+
         S_squared = Sx * Sx + Sy * Sy + Sz * Sz
         s = n / 2.0
         expected_eigenvalue = s * (s + 1)
-        
+
         S_squared_np = convert_mpmatrix_to_numpy(S_squared)
         expected_np = expected_eigenvalue * np.eye(n + 1, dtype=np.complex128)
-        
+
         assert np.allclose(S_squared_np, expected_np)
+
+    @pytest.mark.parametrize("n", [2, 5, 10])
+    def test_commutation_relation_sy_sz(self, n):
+        """Test [Sy, Sz] = i*Sx."""
+        Sz, Sx, Sy = create_spin_xyz_operators(n)
+
+        commutator = Sy * Sz - Sz * Sy
+
+        commutator_np = convert_mpmatrix_to_numpy(commutator)
+        Sx_np = convert_mpmatrix_to_numpy(Sx)
+
+        assert np.allclose(commutator_np, 1j * Sx_np)
+
+    @pytest.mark.parametrize("n", [2, 5, 10])
+    def test_commutation_relation_sz_sx(self, n):
+        """Test [Sz, Sx] = i*Sy."""
+        Sz, Sx, Sy = create_spin_xyz_operators(n)
+
+        commutator = Sz * Sx - Sx * Sz
+
+        commutator_np = convert_mpmatrix_to_numpy(commutator)
+        Sy_np = convert_mpmatrix_to_numpy(Sy)
+
+        assert np.allclose(commutator_np, 1j * Sy_np)
+
+    @pytest.mark.parametrize("n", [2, 5])
+    def test_spin_operators_traceless(self, n):
+        """Test that Sx, Sy, Sz are traceless."""
+        Sz, Sx, Sy = create_spin_xyz_operators(n)
+
+        for S, name in [(Sz, "Sz"), (Sx, "Sx"), (Sy, "Sy")]:
+            trace = sum(S[i, i] for i in range(n + 1))
+            assert mp.fabs(trace) < 1e-10, f"{name} is not traceless"
 
 
 class TestHamiltonian:
@@ -262,17 +295,102 @@ class TestACField:
         Sz, Sx, Sy = create_spin_xyz_operators(n)
         J, B = 1.0, 0.4
         H_0 = create_hamiltonian_h0(J, B, n)
-        
+
         omega = mp.mpf(2.0)
         phi_0 = mp.mpf(0.0)
         h = mp.mpf(0.0)
         t_k = mp.mpf(0.5)
         theta = mp.mpf(0.1)
         varphi = mp.mpf(0.2)
-        
+
         V = create_v_operator(H_0, Sx, Sy, Sz, omega, phi_0, h, t_k, theta, varphi)
-        
+
         V_np = convert_mpmatrix_to_numpy(V)
         H0_np = convert_mpmatrix_to_numpy(H_0)
-        
+
         assert np.allclose(V_np, H0_np)
+
+    @pytest.mark.parametrize("n", [2, 5])
+    def test_ac_time_theta_zero_gives_only_sz(self, n):
+        """Test that ac_time with theta=0 yields sin(wt)*Sz (only z-component)."""
+        Sz, Sx, Sy = create_spin_xyz_operators(n)
+        omega = mp.mpf(1.0)
+        phi_0 = mp.mpf(0.0)
+        t_k = mp.pi / 2   # sin(pi/2) = 1
+        theta = mp.mpf(0.0)   # cos(0)=1, sin(0)=0
+        varphi = mp.mpf(0.3)  # doesn't matter when theta=0
+
+        H_ac = ac_time(Sx, Sy, Sz, omega, phi_0, t_k, theta, varphi)
+
+        H_ac_np = convert_mpmatrix_to_numpy(H_ac)
+        Sz_np = convert_mpmatrix_to_numpy(Sz)
+
+        # At t=pi/2, sin=1, theta=0 => only cos(theta)*Sz = Sz
+        assert np.allclose(H_ac_np, Sz_np)
+
+    @pytest.mark.parametrize("n", [2, 5])
+    def test_ac_time_theta_pi2_varphi_0_gives_only_sx(self, n):
+        """Test that ac_time with theta=pi/2, varphi=0 yields sin(wt)*Sx."""
+        Sz, Sx, Sy = create_spin_xyz_operators(n)
+        omega = mp.mpf(1.0)
+        phi_0 = mp.mpf(0.0)
+        t_k = mp.pi / 2   # sin(pi/2) = 1
+        theta = mp.pi / 2  # sin(pi/2)=1, cos(pi/2)=0
+        varphi = mp.mpf(0.0)  # cos(0)=1, sin(0)=0
+
+        H_ac = ac_time(Sx, Sy, Sz, omega, phi_0, t_k, theta, varphi)
+
+        H_ac_np = convert_mpmatrix_to_numpy(H_ac)
+        Sx_np = convert_mpmatrix_to_numpy(Sx)
+
+        assert np.allclose(H_ac_np, Sx_np, atol=1e-10)
+
+    @pytest.mark.parametrize("n", [2, 5])
+    def test_ac_time_theta_pi2_varphi_pi2_gives_only_sy(self, n):
+        """Test that ac_time with theta=pi/2, varphi=pi/2 yields sin(wt)*Sy."""
+        Sz, Sx, Sy = create_spin_xyz_operators(n)
+        omega = mp.mpf(1.0)
+        phi_0 = mp.mpf(0.0)
+        t_k = mp.pi / 2   # sin(pi/2) = 1
+        theta = mp.pi / 2  # sin(pi/2)=1, cos(pi/2)=0
+        varphi = mp.pi / 2  # cos(pi/2)=0, sin(pi/2)=1
+
+        H_ac = ac_time(Sx, Sy, Sz, omega, phi_0, t_k, theta, varphi)
+
+        H_ac_np = convert_mpmatrix_to_numpy(H_ac)
+        Sy_np = convert_mpmatrix_to_numpy(Sy)
+
+        assert np.allclose(H_ac_np, Sy_np, atol=1e-10)
+
+    @pytest.mark.parametrize("n", [2, 5])
+    def test_v_operator_hermitian_for_nonzero_h(self, n):
+        """Test that V(t) is Hermitian for nonzero drive amplitude h."""
+        Sz, Sx, Sy = create_spin_xyz_operators(n)
+        J, B = 1.0, 0.4
+        H_0 = create_hamiltonian_h0(J, B, n)
+
+        omega = mp.mpf(2.0)
+        phi_0 = mp.mpf(0.1)
+        h = mp.mpf(0.5)
+        t_k = mp.mpf(0.3)
+        theta = mp.mpf(0.4)
+        varphi = mp.mpf(0.7)
+
+        V = create_v_operator(H_0, Sx, Sy, Sz, omega, phi_0, h, t_k, theta, varphi)
+        V_np = convert_mpmatrix_to_numpy(V)
+
+        assert np.allclose(V_np, V_np.T.conj())
+
+    @pytest.mark.parametrize("n", [2, 5])
+    def test_hamiltonian_zero_zz_coupling(self, n):
+        """Test Hamiltonian with J=0 is purely the transverse field -2*B*Sx."""
+        J, B = 0.0, 1.0
+        H = create_hamiltonian_h0(J, B, n)
+        Sz, Sx, Sy = create_spin_xyz_operators(n)
+
+        expected = -mp.mpf(B) * 2 * Sx
+
+        H_np = convert_mpmatrix_to_numpy(H)
+        expected_np = convert_mpmatrix_to_numpy(expected)
+
+        assert np.allclose(H_np, expected_np)

@@ -8,7 +8,12 @@ from lmg_qfi import (
     dketa_t,
     quantum_fisher_information_mp,
     calculate_error_estimation_mp,
+    process_time_point_mp,
     create_spin_xyz_operators,
+    create_hamiltonian_h0,
+    calculate_unitary_T,
+    QFIInformation,
+    UF,
 )
 
 np.set_printoptions(precision=4, suppress=True)
@@ -216,6 +221,143 @@ class TestQFIPhysicalProperties:
         dket = Sy * ket
         
         qfi = quantum_fisher_information_mp(dket, ket)
-        
+
         # QFI should not exceed the Heisenberg limit for this state
         assert qfi <= 4 * max_qfi_coherent + 1e-8
+
+
+def _build_floque_u(h, params, H_0):
+    """Helper: eigendecompose U_T for a given h."""
+    U = calculate_unitary_T(h, params, H_0)
+    eigenvalues, eigenvectors = mp.eig(U)
+    return UF(
+        eigenvalues=eigenvalues,
+        U=eigenvectors,
+        U_inv=mp.inverse(eigenvectors),
+    )
+
+
+class TestProcessTimePointMp:
+    """Tests for process_time_point_mp."""
+
+    def _base_setup(self, n=2):
+        """Return a minimal params dict, H_0, spin operators, and floque unitaries."""
+        params = dict(
+            J=mp.mpf(1.0),
+            B=mp.mpf(0.4),
+            phi=mp.pi,
+            T=mp.mpf(1.0),
+            varphi=mp.mpf(0.0),
+            h=mp.mpf(0.1),
+            N=n,
+            nu=2,
+            phi_0=mp.mpf(0.0),
+            steps_floquet_unitary=10,
+            theta=mp.mpf(0.0),
+            epsilon=mp.mpf("1e-8"),
+        )
+        H_0 = create_hamiltonian_h0(1.0, 0.4, n)
+        h = params["h"]
+        eps = params["epsilon"]
+        floque_u = _build_floque_u(h, params, H_0)
+        floque_u_p = _build_floque_u(h + eps, params, H_0)
+        floque_u_m = _build_floque_u(h - eps, params, H_0)
+        Zsum, Xsum, Ysum = create_spin_xyz_operators(n)
+        return params, H_0, floque_u, floque_u_p, floque_u_m, Zsum, Xsum, Ysum
+
+    def test_returns_qfi_information(self):
+        """process_time_point_mp returns a QFIInformation instance."""
+        params, H_0, fu, fu_p, fu_m, Zsum, Xsum, Ysum = self._base_setup(n=2)
+        init_state = mp.zeros(3, 1)
+        init_state[0] = mp.mpf("1.0")
+
+        result = process_time_point_mp(
+            time=2, params=params, H_0=H_0,
+            floque_u=fu, floque_u_p=fu_p, floque_u_m=fu_m,
+            init_state=init_state, Zsum=Zsum, Xsum=Xsum, Ysum=Ysum,
+        )
+
+        assert isinstance(result, QFIInformation)
+
+    def test_time_stored_correctly(self):
+        """The time field matches the input."""
+        params, H_0, fu, fu_p, fu_m, Zsum, Xsum, Ysum = self._base_setup(n=2)
+        init_state = mp.zeros(3, 1)
+        init_state[0] = mp.mpf("1.0")
+
+        result = process_time_point_mp(
+            time=5, params=params, H_0=H_0,
+            floque_u=fu, floque_u_p=fu_p, floque_u_m=fu_m,
+            init_state=init_state, Zsum=Zsum, Xsum=Xsum, Ysum=Ysum,
+        )
+
+        assert result.time == 5
+
+    def test_qfi_non_negative(self):
+        """QFI must be non-negative."""
+        params, H_0, fu, fu_p, fu_m, Zsum, Xsum, Ysum = self._base_setup(n=2)
+        init_state = mp.zeros(3, 1)
+        init_state[0] = mp.mpf("1.0")
+
+        result = process_time_point_mp(
+            time=2, params=params, H_0=H_0,
+            floque_u=fu, floque_u_p=fu_p, floque_u_m=fu_m,
+            init_state=init_state, Zsum=Zsum, Xsum=Xsum, Ysum=Ysum,
+        )
+
+        assert result.qfi >= 0
+
+    def test_magnetizations_bounded(self):
+        """|m_x|, |m_y|, |m_z| <= 1/2 (spin-1/2 maximum per site scaled by 1/N)."""
+        n = 2
+        params, H_0, fu, fu_p, fu_m, Zsum, Xsum, Ysum = self._base_setup(n=n)
+        init_state = mp.zeros(n + 1, 1)
+        init_state[0] = mp.mpf("1.0")
+
+        result = process_time_point_mp(
+            time=2, params=params, H_0=H_0,
+            floque_u=fu, floque_u_p=fu_p, floque_u_m=fu_m,
+            init_state=init_state, Zsum=Zsum, Xsum=Xsum, Ysum=Ysum,
+        )
+
+        assert abs(result.m_x) <= 0.5 + 1e-8
+        assert abs(result.m_y) <= 0.5 + 1e-8
+        assert abs(result.m_z) <= 0.5 + 1e-8
+
+    def test_result_has_all_fields(self):
+        """All QFIInformation fields are populated."""
+        params, H_0, fu, fu_p, fu_m, Zsum, Xsum, Ysum = self._base_setup(n=2)
+        init_state = mp.zeros(3, 1)
+        init_state[0] = mp.mpf("1.0")
+
+        result = process_time_point_mp(
+            time=2, params=params, H_0=H_0,
+            floque_u=fu, floque_u_p=fu_p, floque_u_m=fu_m,
+            init_state=init_state, Zsum=Zsum, Xsum=Xsum, Ysum=Ysum,
+        )
+
+        assert hasattr(result, "qfi")
+        assert hasattr(result, "qfi_raw_value")
+        assert hasattr(result, "time")
+        assert hasattr(result, "m_x")
+        assert hasattr(result, "m_y")
+        assert hasattr(result, "m_z")
+
+    @pytest.mark.parametrize("time", [2, 4, 6])
+    def test_qfi_raw_value_is_string(self, time):
+        """qfi_raw_value is stored as a string (for high-precision output)."""
+        params, H_0, fu, fu_p, fu_m, Zsum, Xsum, Ysum = self._base_setup(n=2)
+        init_state = mp.zeros(3, 1)
+        init_state[0] = mp.mpf("1.0")
+
+        result = process_time_point_mp(
+            time=time, params=params, H_0=H_0,
+            floque_u=fu, floque_u_p=fu_p, floque_u_m=fu_m,
+            init_state=init_state, Zsum=Zsum, Xsum=Xsum, Ysum=Ysum,
+        )
+
+        assert isinstance(result.qfi_raw_value, str)
+        # The raw value should be parseable as a float
+        assert float(result.qfi_raw_value.strip("(").split("+")[0]) == float(
+            result.qfi_raw_value.strip("(").split("+")[0]
+        )
