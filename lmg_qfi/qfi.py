@@ -74,6 +74,10 @@ def process_time_point_mp(
         Zsum: mp.matrix,
         Xsum: mp.matrix,
         Ysum: mp.matrix,
+        kick_op=None,
+        trig_cache=None,
+        t_delta=None,
+        omega=None,
 ) -> QFIInformation:
     """
     Compute observables and QFI at a given time point using mpmath arbitrary precision.
@@ -81,11 +85,20 @@ def process_time_point_mp(
     epsilon = params["epsilon"]
     N = params["N"]
     h = params["h"]
-    
+
     # Compute Floquet unitaries at different delta shifts
-    floquet_unitary = calculate_unitary_at_time_mp(h, time, params, H_0, floque_u)
-    floquet_unitary_p_delta = calculate_unitary_at_time_mp(h + epsilon, time, params, H_0, floque_u_p)
-    floquet_unitary_m_delta = calculate_unitary_at_time_mp(h - epsilon, time, params, H_0, floque_u_m)
+    floquet_unitary = calculate_unitary_at_time_mp(h, time, params, H_0, floque_u,
+                                                    Zsum=Zsum, Xsum=Xsum, Ysum=Ysum,
+                                                    kick_op=kick_op, trig_cache=trig_cache,
+                                                    t_delta=t_delta, omega=omega)
+    floquet_unitary_p_delta = calculate_unitary_at_time_mp(h + epsilon, time, params, H_0, floque_u_p,
+                                                            Zsum=Zsum, Xsum=Xsum, Ysum=Ysum,
+                                                            kick_op=kick_op, trig_cache=trig_cache,
+                                                            t_delta=t_delta, omega=omega)
+    floquet_unitary_m_delta = calculate_unitary_at_time_mp(h - epsilon, time, params, H_0, floque_u_m,
+                                                            Zsum=Zsum, Xsum=Xsum, Ysum=Ysum,
+                                                            kick_op=kick_op, trig_cache=trig_cache,
+                                                            t_delta=t_delta, omega=omega)
     
     # Evolve ket
     ket_t = floquet_unitary * init_state
