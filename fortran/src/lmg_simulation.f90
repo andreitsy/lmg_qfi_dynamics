@@ -3,7 +3,7 @@ module lmg_simulation
   use lmg_types, only: SimulationParams_type, UF_type, QFIInformation_type, &
                         STATE_GS_PHYS, STATE_GS_CAT, STATE_PHYS, STATE_CAT_SUM, STATE_LABELS
   use lmg_linalg, only: eigh, eye_complex
-  use lmg_operators, only: create_spin_xyz_operators, create_hamiltonian_h0
+  use lmg_operators, only: create_spin_xyz_operators, create_hamiltonian_h0, create_kick_operator
   use lmg_evolution, only: calculate_unitary_T, build_uf
   use lmg_qfi_mod, only: process_time_point
   use lmg_io, only: save_to_file_qfi_dynamics, build_output_filename
@@ -109,40 +109,19 @@ contains
 
     real(dp) :: eigenvalues(dim)
     complex(dp) :: eigvecs(dim, dim)
-    integer :: sorted_idx(dim), i, j, min_idx
-    real(dp) :: min_val, norm_val
+    real(dp) :: norm_val
 
     select case(state_id)
     case(STATE_GS_PHYS, STATE_GS_CAT)
-      ! Eigendecompose H0
+      ! Eigendecompose H0 — eigh returns eigenvalues sorted ascending
       call eigh(H0, dim, eigenvalues, eigvecs)
-
-      ! Find sorted indices (ascending eigenvalue)
-      do i = 1, dim
-        sorted_idx(i) = i
-      end do
-      do i = 1, dim - 1
-        min_idx = i
-        min_val = eigenvalues(sorted_idx(i))
-        do j = i + 1, dim
-          if (eigenvalues(sorted_idx(j)) < min_val) then
-            min_idx = j
-            min_val = eigenvalues(sorted_idx(j))
-          end if
-        end do
-        if (min_idx /= i) then
-          j = sorted_idx(i)
-          sorted_idx(i) = sorted_idx(min_idx)
-          sorted_idx(min_idx) = j
-        end if
-      end do
 
       if (state_id == STATE_GS_CAT) then
         ! Ground state of H0
-        init_state = eigvecs(:, sorted_idx(1))
+        init_state = eigvecs(:, 1)
       else
         ! GS_PHYS: ground state + first excited state
-        init_state = eigvecs(:, sorted_idx(1)) + eigvecs(:, sorted_idx(2))
+        init_state = eigvecs(:, 1) + eigvecs(:, 2)
       end if
 
     case(STATE_PHYS)
@@ -167,15 +146,18 @@ contains
   end subroutine build_initial_state
 
   !> Main simulation loop over time points.
+  !> Accepts precomputed H0 to avoid redundant construction.
   subroutine simulation_with_AC_field(params, time_points, num_time_points, &
-                                       init_state, n, results)
+                                       init_state, H0, n, results)
     type(SimulationParams_type), intent(in) :: params
     integer, intent(in) :: time_points(:)
     integer, intent(in) :: num_time_points, n
     complex(dp), intent(in) :: init_state(n+1)
+    complex(dp), intent(in) :: H0(n+1, n+1)
     type(QFIInformation_type), intent(out) :: results(num_time_points)
 
-    complex(dp) :: H0(n+1, n+1), Sz(n+1, n+1), Sx(n+1, n+1), Sy(n+1, n+1)
+    complex(dp) :: Sz(n+1, n+1), Sx(n+1, n+1), Sy(n+1, n+1)
+    complex(dp) :: kick(n+1, n+1)
     complex(dp) :: U_T(n+1, n+1), U_Tp(n+1, n+1), U_Tm(n+1, n+1)
     type(UF_type) :: uf, uf_p, uf_m
     real(dp) :: epsilon
@@ -184,24 +166,25 @@ contains
     dim = n + 1
     epsilon = EPSILON_FD
 
-    call create_hamiltonian_h0(params%J, params%B, n, H0)
+    ! Create spin operators and kick operator once for the entire simulation
     call create_spin_xyz_operators(n, Sz, Sx, Sy)
+    call create_kick_operator(params%phi_kick_phase, Sx, n, kick)
 
     ! Compute Floquet unitaries for h, h+eps, h-eps
-    call calculate_unitary_T(params%h, params, H0, n, U_T)
+    call calculate_unitary_T(params%h, params, H0, Sz, Sx, Sy, kick, n, U_T)
     call build_uf(U_T, dim, uf)
 
-    call calculate_unitary_T(params%h + epsilon, params, H0, n, U_Tp)
+    call calculate_unitary_T(params%h + epsilon, params, H0, Sz, Sx, Sy, kick, n, U_Tp)
     call build_uf(U_Tp, dim, uf_p)
 
-    call calculate_unitary_T(params%h - epsilon, params, H0, n, U_Tm)
+    call calculate_unitary_T(params%h - epsilon, params, H0, Sz, Sx, Sy, kick, n, U_Tm)
     call build_uf(U_Tm, dim, uf_m)
 
     ! Parallel loop over time points
     !$OMP PARALLEL DO SCHEDULE(DYNAMIC) DEFAULT(SHARED) PRIVATE(i)
     do i = 1, num_time_points
       call process_time_point(time_points(i), params, H0, uf, uf_p, uf_m, &
-                               init_state, Sz, Sx, Sy, n, results(i))
+                               init_state, Sz, Sx, Sy, kick, n, results(i))
     end do
     !$OMP END PARALLEL DO
 
@@ -257,7 +240,7 @@ contains
       write(*,'(A,A)') 'Running simulation for state: ', trim(slabel)
 
       call build_initial_state(state_ids(s), H0, dim, params%N, init_state)
-      call simulation_with_AC_field(params, time_points, total_points, init_state, params%N, results)
+      call simulation_with_AC_field(params, time_points, total_points, init_state, H0, params%N, results)
 
       call build_output_filename(trim(slabel), params%N, params%B, trim(params%output_dir), output_file)
       call save_to_file_qfi_dynamics(results, total_points, trim(output_file))

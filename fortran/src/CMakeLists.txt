@@ -20,6 +20,7 @@ if(ENABLE_OPENMP AND OpenMP_Fortran_FOUND)
   target_compile_definitions(lmg_qfi PUBLIC USE_OPENMP)
 endif()
 
-# Main executable
+# Main executable — place in project root
 add_executable(lmg_qfi_sim main.f90)
 target_link_libraries(lmg_qfi_sim PRIVATE lmg_qfi)
+set_target_properties(lmg_qfi_sim PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})

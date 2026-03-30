@@ -2,7 +2,7 @@ program test_evolution
   use lmg_constants, only: dp, CI, CZERO, CONE, PI
   use lmg_types, only: UF_type, SimulationParams_type
   use lmg_linalg, only: eig, matrix_inverse, eye_complex, expm_hermitian
-  use lmg_operators, only: create_spin_xyz_operators, create_hamiltonian_h0
+  use lmg_operators, only: create_spin_xyz_operators, create_hamiltonian_h0, create_kick_operator
   use lmg_evolution, only: evolution_T_step, find_power_r, build_uf, &
                             calculate_unitary_T, calculate_unitary_at_time
   use test_utils
@@ -172,11 +172,14 @@ contains
     integer, parameter :: n = 5
     type(SimulationParams_type) :: params
     complex(dp) :: H0(n+1,n+1), U_T(n+1,n+1)
+    complex(dp) :: Sz(n+1,n+1), Sx(n+1,n+1), Sy(n+1,n+1), kick(n+1,n+1)
 
     call test_start('U_T unitary')
     params = make_params(n, 2)
     call create_hamiltonian_h0(1.0_dp, 0.4_dp, n, H0)
-    call calculate_unitary_T(0.0_dp, params, H0, n, U_T)
+    call create_spin_xyz_operators(n, Sz, Sx, Sy)
+    call create_kick_operator(params%phi_kick_phase, Sx, n, kick)
+    call calculate_unitary_T(0.0_dp, params, H0, Sz, Sx, Sy, kick, n, U_T)
     call assert_matrix_unitary(U_T, n+1, 1e-10_dp, 'U_T unitary')
     call test_pass()
   end subroutine
@@ -185,6 +188,7 @@ contains
     integer, parameter :: n = 2
     type(SimulationParams_type) :: params
     complex(dp) :: H0(n+1,n+1), U_T(n+1,n+1)
+    complex(dp) :: Sz(n+1,n+1), Sx(n+1,n+1), Sy(n+1,n+1), kick(n+1,n+1)
     complex(dp) :: det_val
     ! For a small matrix, compute det via cofactor expansion
     ! 3x3: det = a(ei-fh) - b(di-fg) + c(dh-eg)
@@ -194,7 +198,9 @@ contains
     params%h = 0.1_dp
     params%theta = 0.1_dp
     call create_hamiltonian_h0(1.0_dp, 0.4_dp, n, H0)
-    call calculate_unitary_T(0.1_dp, params, H0, n, U_T)
+    call create_spin_xyz_operators(n, Sz, Sx, Sy)
+    call create_kick_operator(params%phi_kick_phase, Sx, n, kick)
+    call calculate_unitary_T(0.1_dp, params, H0, Sz, Sx, Sy, kick, n, U_T)
 
     det_val = U_T(1,1) * (U_T(2,2)*U_T(3,3) - U_T(2,3)*U_T(3,2)) &
             - U_T(1,2) * (U_T(2,1)*U_T(3,3) - U_T(2,3)*U_T(3,1)) &
@@ -209,13 +215,16 @@ contains
     type(SimulationParams_type) :: params
     type(UF_type) :: uf
     complex(dp) :: H0(n+1,n+1), U_T(n+1,n+1), result(n+1,n+1), I_mat(n+1,n+1)
+    complex(dp) :: Sz(n+1,n+1), Sx(n+1,n+1), Sy(n+1,n+1), kick(n+1,n+1)
 
     call test_start('U(t=0) = I')
     params = make_params(n, 2)
     call create_hamiltonian_h0(1.0_dp, 0.4_dp, n, H0)
-    call calculate_unitary_T(0.0_dp, params, H0, n, U_T)
+    call create_spin_xyz_operators(n, Sz, Sx, Sy)
+    call create_kick_operator(params%phi_kick_phase, Sx, n, kick)
+    call calculate_unitary_T(0.0_dp, params, H0, Sz, Sx, Sy, kick, n, U_T)
     call build_uf(U_T, n+1, uf)
-    call calculate_unitary_at_time(0.0_dp, 0, params, H0, uf, n, result)
+    call calculate_unitary_at_time(0.0_dp, 0, params, H0, uf, Sz, Sx, Sy, kick, n, result)
     call eye_complex(n+1, I_mat)
     call assert_matrix_close(result, I_mat, n+1, 1e-10_dp, 'U(0)=I')
     call test_pass()
@@ -226,13 +235,16 @@ contains
     type(SimulationParams_type) :: params
     type(UF_type) :: uf
     complex(dp) :: H0(n+1,n+1), U_T(n+1,n+1), result(n+1,n+1)
+    complex(dp) :: Sz(n+1,n+1), Sx(n+1,n+1), Sy(n+1,n+1), kick(n+1,n+1)
 
     call test_start('U(nu) = U_T')
     params = make_params(n, nu)
     call create_hamiltonian_h0(1.0_dp, 0.4_dp, n, H0)
-    call calculate_unitary_T(0.0_dp, params, H0, n, U_T)
+    call create_spin_xyz_operators(n, Sz, Sx, Sy)
+    call create_kick_operator(params%phi_kick_phase, Sx, n, kick)
+    call calculate_unitary_T(0.0_dp, params, H0, Sz, Sx, Sy, kick, n, U_T)
     call build_uf(U_T, n+1, uf)
-    call calculate_unitary_at_time(0.0_dp, nu, params, H0, uf, n, result)
+    call calculate_unitary_at_time(0.0_dp, nu, params, H0, uf, Sz, Sx, Sy, kick, n, result)
     call assert_matrix_close(result, U_T, n+1, 1e-8_dp, 'U(nu)=U_T')
     call test_pass()
   end subroutine
@@ -242,14 +254,17 @@ contains
     type(SimulationParams_type) :: params
     type(UF_type) :: uf
     complex(dp) :: H0(n+1,n+1), U_T(n+1,n+1), result(n+1,n+1)
+    complex(dp) :: Sz(n+1,n+1), Sx(n+1,n+1), Sy(n+1,n+1), kick(n+1,n+1)
 
     call test_start('U(t) unitary')
     params = make_params(n, 2)
     params%h = 0.1_dp
     call create_hamiltonian_h0(1.0_dp, 0.4_dp, n, H0)
-    call calculate_unitary_T(0.1_dp, params, H0, n, U_T)
+    call create_spin_xyz_operators(n, Sz, Sx, Sy)
+    call create_kick_operator(params%phi_kick_phase, Sx, n, kick)
+    call calculate_unitary_T(0.1_dp, params, H0, Sz, Sx, Sy, kick, n, U_T)
     call build_uf(U_T, n+1, uf)
-    call calculate_unitary_at_time(0.1_dp, 4, params, H0, uf, n, result)
+    call calculate_unitary_at_time(0.1_dp, 4, params, H0, uf, Sz, Sx, Sy, kick, n, result)
     call assert_matrix_unitary(result, n+1, 1e-6_dp, 'U(t=4) unitary')
     call test_pass()
   end subroutine

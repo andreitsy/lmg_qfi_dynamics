@@ -11,23 +11,28 @@ endif()
 
 # Compiler flags
 if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
-  set(CMAKE_Fortran_FLAGS_DEBUG   "-g -O0 -Wall -Wextra -fcheck=all -fbacktrace")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -march=native")
+
+  set(CMAKE_Fortran_FLAGS_DEBUG
+      "-g -O0 -Wall -Wextra -fcheck=all -fbacktrace")
+
+  set(CMAKE_Fortran_FLAGS_RELEASE
+      "-O3 -march=native -mtune=native -funroll-loops -flto")
+
 elseif(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
-  set(CMAKE_Fortran_FLAGS_DEBUG   "-g -O0 -warn all -check all -traceback")
-  set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -xHost")
+
+  set(CMAKE_Fortran_FLAGS_DEBUG
+      "-g -O0 -warn all -check all -traceback")
+
+  set(CMAKE_Fortran_FLAGS_RELEASE
+      "-O3 -xHost -ipo -qopenmp")
+
 endif()
 
-# OpenMP (optional)
+# OpenMP
 option(ENABLE_OPENMP "Enable OpenMP parallelization" ON)
+
 if(ENABLE_OPENMP)
-  find_package(OpenMP)
-  if(OpenMP_Fortran_FOUND)
-    message(STATUS "OpenMP found: ${OpenMP_Fortran_FLAGS}")
-  else()
-    message(WARNING "OpenMP not found, building without OpenMP support")
-    set(ENABLE_OPENMP OFF)
-  endif()
+  find_package(OpenMP REQUIRED)
 endif()
 
 # CTest

@@ -1,7 +1,6 @@
 module lmg_qfi_mod
   use lmg_constants, only: dp, CZERO
   use lmg_types, only: QFIInformation_type, UF_type, SimulationParams_type
-  use lmg_operators, only: create_spin_xyz_operators
   use lmg_evolution, only: calculate_unitary_at_time
   implicit none
   private
@@ -50,14 +49,16 @@ contains
   end function calculate_error_estimation
 
   !> Process a single time point: compute QFI and magnetizations.
+  !> Accepts precomputed spin operators and kick to avoid redundant construction.
   subroutine process_time_point(time, params, H0, uf, uf_p, uf_m, &
-                                 init_state, Sz, Sx, Sy, n, result)
+                                 init_state, Sz, Sx, Sy, kick, n, result)
     integer, intent(in) :: time, n
     type(SimulationParams_type), intent(in) :: params
     complex(dp), intent(in) :: H0(n+1,n+1)
     type(UF_type), intent(in) :: uf, uf_p, uf_m
     complex(dp), intent(in) :: init_state(n+1)
     complex(dp), intent(in) :: Sz(n+1,n+1), Sx(n+1,n+1), Sy(n+1,n+1)
+    complex(dp), intent(in) :: kick(n+1,n+1)
     type(QFIInformation_type), intent(out) :: result
 
     complex(dp) :: U_t(n+1,n+1), U_tp(n+1,n+1), U_tm(n+1,n+1)
@@ -67,18 +68,16 @@ contains
     integer :: dim
 
     dim = n + 1
-    epsilon = params%h  ! will be overridden — use the FD epsilon
-    ! The finite-difference epsilon from the Python code is 1e-(dps//2) ~ 1e-7
-    ! We pass it via the EPSILON_FD constant
     block
       use lmg_constants, only: EPSILON_FD
       epsilon = EPSILON_FD
     end block
 
-    ! Compute unitaries at this time
-    call calculate_unitary_at_time(params%h, time, params, H0, uf, n, U_t)
-    call calculate_unitary_at_time(params%h + epsilon, time, params, H0, uf_p, n, U_tp)
-    call calculate_unitary_at_time(params%h - epsilon, time, params, H0, uf_m, n, U_tm)
+    ! Compute unitaries at this time using precomputed operators
+    ! kick is the same for all three h values (depends only on phi_kick_phase and Sx)
+    call calculate_unitary_at_time(params%h, time, params, H0, uf, Sz, Sx, Sy, kick, n, U_t)
+    call calculate_unitary_at_time(params%h + epsilon, time, params, H0, uf_p, Sz, Sx, Sy, kick, n, U_tp)
+    call calculate_unitary_at_time(params%h - epsilon, time, params, H0, uf_m, Sz, Sx, Sy, kick, n, U_tm)
 
     ! Evolve states
     ket = matmul(U_t, init_state)

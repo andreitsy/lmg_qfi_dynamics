@@ -57,11 +57,14 @@ contains
   end subroutine eigh
 
   !> Apply one Jacobi rotation to zero W(p,q) in a Hermitian matrix.
+  !> Uses the standard two-step approach: phase removal + real Givens rotation.
+  !> G = D * R where D = diag(..., e^{-imu}, ...) at position q removes the phase,
+  !> and R = [c, s; -s, c] is the standard real Givens rotation.
   subroutine jacobi_rotate(W, V, n, p, q)
     complex(dp), intent(inout) :: W(n,n), V(n,n)
     integer, intent(in) :: n, p, q
 
-    complex(dp) :: Wpq, phase, tmp_p, tmp_q
+    complex(dp) :: Wpq, phase_conj, tmp_p, tmp_q
     real(dp) :: app, aqq, beta_abs, tau, t, c, s
     integer :: k
 
@@ -69,13 +72,13 @@ contains
     beta_abs = abs(Wpq)
     if (beta_abs < tiny(1.0_dp)) return
 
-    ! Phase: Wpq = beta_abs * exp(i*mu)
-    phase = Wpq / beta_abs   ! exp(i*mu)
+    ! Phase: Wpq = beta_abs * exp(i*mu), phase_conj = exp(-i*mu)
+    phase_conj = conjg(Wpq) / beta_abs
 
     app = real(W(p,p), dp)
     aqq = real(W(q,q), dp)
 
-    ! Compute rotation angle
+    ! Compute rotation angle for real Givens after phase removal
     if (abs(app - aqq) < tiny(1.0_dp)) then
       t = 1.0_dp
     else
@@ -98,30 +101,30 @@ contains
     W(q,p) = CZERO
 
     ! Update off-diagonal elements (rows/columns p and q)
-    ! Rotation G acts as:
-    !   new_row_p = c * row_p + s * conj(phase) * row_q
-    !   new_row_q = -s * phase * row_p + c * row_q
+    ! Combined transform G = D*R gives:
+    !   W_new(k,p) = c * W(k,p) - s * conj(phase) * W(k,q)
+    !   W_new(k,q) = s * W(k,p) + c * conj(phase) * W(k,q)
     do k = 1, n
       if (k == p .or. k == q) cycle
 
       tmp_p = W(k,p)
       tmp_q = W(k,q)
 
-      W(k,p) = c * tmp_p + s * conjg(phase) * tmp_q
-      W(k,q) = -s * phase * tmp_p + c * tmp_q
+      W(k,p) = c * tmp_p - s * phase_conj * tmp_q
+      W(k,q) = s * tmp_p + c * phase_conj * tmp_q
 
       ! Hermitian: W(p,k) = conj(W(k,p)), W(q,k) = conj(W(k,q))
       W(p,k) = conjg(W(k,p))
       W(q,k) = conjg(W(k,q))
     end do
 
-    ! Update eigenvector matrix: V <- V * G
+    ! Update eigenvector matrix: V <- V * G = V * D * R
     do k = 1, n
       tmp_p = V(k,p)
       tmp_q = V(k,q)
 
-      V(k,p) = c * tmp_p + s * conjg(phase) * tmp_q
-      V(k,q) = -s * phase * tmp_p + c * tmp_q
+      V(k,p) = c * tmp_p - s * phase_conj * tmp_q
+      V(k,q) = s * tmp_p + c * phase_conj * tmp_q
     end do
   end subroutine jacobi_rotate
 
@@ -130,13 +133,14 @@ contains
     integer, intent(in) :: n
     real(dp), intent(out) :: norm
     integer :: i, j
+    ! For Hermitian A, |A(i,j)|^2 = |A(j,i)|^2, so sum upper triangle and double
     norm = 0.0_dp
-    do j = 1, n
-      do i = 1, n
-        if (i /= j) norm = norm + real(A(i,j) * conjg(A(i,j)), dp)
+    do j = 2, n
+      do i = 1, j - 1
+        norm = norm + real(A(i,j) * conjg(A(i,j)), dp)
       end do
     end do
-    norm = sqrt(norm)
+    norm = sqrt(2.0_dp * norm)
   end subroutine compute_offdiag_norm
 
   subroutine compute_diag_norm(A, n, norm)
@@ -616,18 +620,19 @@ contains
 
     real(dp) :: eigenvalues(n)
     complex(dp) :: eigvecs(n,n), eigvecs_dag(n,n)
-    complex(dp) :: diag_exp(n,n)
+    complex(dp) :: scaled(n,n)
     integer :: i
 
     call eigh(H, n, eigenvalues, eigvecs)
 
-    diag_exp = CZERO
+    ! Scale columns of eigvecs by exp(-i * alpha * lambda_i)
+    ! This replaces matmul(eigvecs, diag_exp) without forming the diagonal matrix
     do i = 1, n
-      diag_exp(i,i) = exp(-CI * alpha * eigenvalues(i))
+      scaled(:, i) = eigvecs(:, i) * exp(-CI * alpha * eigenvalues(i))
     end do
 
     call adjoint(eigvecs, n, eigvecs_dag)
-    result = matmul(eigvecs, matmul(diag_exp, eigvecs_dag))
+    result = matmul(scaled, eigvecs_dag)
   end subroutine expm_hermitian
 
   ! ================================================================
