@@ -7,7 +7,7 @@ name = "lmg_qfi"
 version = "0.1.0"
 description = "QFI dynamics in LMG Model"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "mpmath",
     "numpy",
