@@ -13,11 +13,15 @@ mp.dps = 100
 # Import main classes and functions for convenient access
 from .config import (
     InitialState,
+    EstimationParameter,
+    SolverType,
     SimulationParams,
     QFIInformation,
     SLDInformation,
     UF,
     read_defaults_args_from_config,
+    add_simulation_cli_arguments,
+    apply_simulation_cli_arguments,
     parse_arguments,
 )
 
@@ -34,21 +38,26 @@ from .operators import (
 
 from .evolution import (
     evalution_T_step,
+    resolve_omega,
     find_power_r_mpmath,
     calculate_unitary_at_time_mp,
     calculate_unitary_T,
+    evolve_kets_one_period,
 )
 
 from .qfi import (
     dketa_t,
     quantum_fisher_information_mp,
     calculate_error_estimation_mp,
+    qfi_information_from_kets,
     process_time_point_mp,
 )
 
 from .simulation import (
     generate_time_interval,
+    frequency_estimation_epsilon,
     simulation_with_AC_field_mp,
+    simulation_with_AC_field_frequency_mp,
     run_simulation,
     run_gaps,
 )
@@ -77,11 +86,15 @@ from .utils import (
 __all__ = [
     # Config
     "InitialState",
+    "EstimationParameter",
+    "SolverType",
     "SimulationParams",
     "QFIInformation",
     "SLDInformation",
     "UF",
     "read_defaults_args_from_config",
+    "add_simulation_cli_arguments",
+    "apply_simulation_cli_arguments",
     "parse_arguments",
     # Operators
     "create_z_operator",
@@ -94,17 +107,22 @@ __all__ = [
     "create_v_operator",
     # Evolution
     "evalution_T_step",
+    "resolve_omega",
     "find_power_r_mpmath",
     "calculate_unitary_at_time_mp",
     "calculate_unitary_T",
+    "evolve_kets_one_period",
     # QFI
     "dketa_t",
     "quantum_fisher_information_mp",
     "calculate_error_estimation_mp",
+    "qfi_information_from_kets",
     "process_time_point_mp",
     # Simulation
     "generate_time_interval",
+    "frequency_estimation_epsilon",
     "simulation_with_AC_field_mp",
+    "simulation_with_AC_field_frequency_mp",
     "run_simulation",
     "run_gaps",
     # I/O

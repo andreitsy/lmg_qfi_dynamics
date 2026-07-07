@@ -44,6 +44,17 @@ def evalution_T_step(
     return floquet_unitary
 
 
+def resolve_omega(params: dict):
+    """
+    Return the drive frequency from ``params["omega"]``, falling back to the
+    resonant value 2*pi/(nu*T) when the key is absent or None.
+    """
+    omega = params.get("omega")
+    if omega is None:
+        omega = mp.mpf(2) * mp.pi / (mp.mpf(params["nu"]) * mp.mpf(params["T"]))
+    return omega
+
+
 def find_power_r_mpmath(floque_u: UF, r):
     """
     Compute the r-th power of the Floquet unitary using eigendecomposition.
@@ -64,7 +75,7 @@ def calculate_unitary_at_time_mp(h, time: int, params: dict, H_0: mp.matrix, flo
     """
     Zsum, Xsum, Ysum = create_spin_xyz_operators(params["N"])
     t_delta = mp.mpf(params["T"]) / params["steps_floquet_unitary"]
-    omega = mp.mpf(2) * mp.pi / mp.mpf(params["nu"] * params["T"])
+    omega = resolve_omega(params)
     r = time // params["nu"]
     extra_interval = range(r * params["nu"] + 1, time + 1)
     floquet_unitary = find_power_r_mpmath(floque_u, r)
@@ -109,7 +120,7 @@ def calculate_unitary_T(
     phi_0 = params["phi_0"]
     Zsum, Xsum, Ysum = create_spin_xyz_operators(n)
     t_delta = mp.mpf(T / steps_floquet_unitary)
-    omega = mp.mpf(2.0) * mp.pi / (nu * T)
+    omega = resolve_omega(params)
     floquet_unitary = mp.eye(H_0.rows)
 
     for p in range(1, nu + 1):
@@ -131,3 +142,51 @@ def calculate_unitary_T(
         )
         floquet_unitary = create_kick_operator(phi, Xsum) * floquet_unitary
     return floquet_unitary
+
+
+def evolve_kets_one_period(kets, omegas, p, h, params, H_0, Xsum, Ysum, Zsum, kick):
+    """
+    Advance kets over kick period p (absolute time in [T(p-1), Tp]), each with
+    its own drive frequency, followed by the kick.
+
+    The drive phase omega*t + phi_0 uses absolute time, so repeated calls with
+    p = 1, 2, ... realize a phase-continuous AC field even when omega is not
+    commensurate with the kick period (required for frequency estimation).
+
+    Parameters
+    ----------
+    kets : list of mp.matrix
+        Column vectors, one per trajectory.
+    omegas : list of mp.mpf
+        Drive frequency for each ket (same length as kets).
+    p : int
+        Kick period index (1-based).
+    kick : mp.matrix
+        Precomputed kick operator exp(-i*phi*Sx).
+
+    Returns
+    -------
+    list of mp.matrix
+        The advanced kets.
+    """
+    t_delta = mp.mpf(params["T"]) / params["steps_floquet_unitary"]
+    evolved = []
+    for ket, omega in zip(kets, omegas):
+        ket = evalution_T_step(
+            ket,
+            h,
+            params["T"],
+            params["varphi"],
+            params["theta"],
+            params["phi_0"],
+            H_0,
+            Xsum,
+            Ysum,
+            Zsum,
+            omega,
+            p,
+            t_delta,
+            params["steps_floquet_unitary"],
+        )
+        evolved.append(kick * ket)
+    return evolved

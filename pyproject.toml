@@ -30,9 +30,6 @@ qiskit = [
     "qiskit",
     "qiskit-ibm-runtime",
 ]
-quspin = [
-    "quspin",
-]
 
 [tool.hatch.build.targets.wheel]
 packages = ["lmg_qfi"]
