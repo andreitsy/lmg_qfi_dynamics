@@ -150,7 +150,7 @@ def compute_floquet_unitary(h: float, params: dict,
 
     for p in range(1, nu + 1):
         U = _evolution_T_step(U, h, T, varphi, theta, phi_0, H0, Sx, Sy, Sz,
-                               omega, p, t_delta, steps)
+                              omega, p, t_delta, steps)
         U = K @ U
     return U
 
