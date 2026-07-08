@@ -2,9 +2,9 @@
 
 Simulation of Quantum Fisher Information dynamics in the Lipkin-Meshkov-Glick model. See paper: https://arxiv.org/abs/2505.22731
 
-```math
+$$
 \hat{H}(t) = -\frac{2J}{N} \hat{S}_z^2 - 2 B \hat{S}_x - \pi \sum_{m=1}^{\infty} \delta(t - mT) \hat{S}_x + \hat V(t)
-```
+$$
 
 ![Plot for QFI](results/qfi_dynamics_N=40_B=0.40.png "QFI dynamics")
 
@@ -54,11 +54,11 @@ By default the QFI is computed with respect to the AC amplitude $h$. With
 `--parameter frequency` (or `parameter = frequency` in `parameters.ini`) the estimated
 parameter is the drive frequency $\omega$ instead:
 
-```math
+$$
 |\partial_\omega \psi(t)\rangle \approx \frac{|\psi(t;\omega+\epsilon)\rangle - |\psi(t;\omega-\epsilon)\rangle}{2\epsilon},
 \qquad
 F_\omega = 4\left(\langle\partial_\omega\psi|\partial_\omega\psi\rangle - |\langle\psi|\partial_\omega\psi\rangle|^2\right).
-```
+$$
 
 Generating the frequency-mode graph $F_\omega/(N^2 t^4)$ versus $t/T$ takes two
 steps — run, then plot:
