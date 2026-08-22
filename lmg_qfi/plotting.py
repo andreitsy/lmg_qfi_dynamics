@@ -8,7 +8,7 @@ import numpy as np
 from pathlib import Path
 from scipy.ndimage import gaussian_filter
 
-from .config import SimulationParams
+from .config import EstimationParameter, InitialState, SimulationParams
 from .operators import create_hamiltonian_h0
 
 # Matplotlib configuration
@@ -19,6 +19,30 @@ mpl.rcParams["text.latex.preamble"] = r"\usepackage{amsmath,amsfonts,amssymb}"
 
 MAX_TIME_POW_PLOT = None
 Y_LABEL_COORDINATE = 0.155
+
+# Plot color and LaTeX label per initial-state key (InitialState.name).
+STATE_PLOT_STYLES = {
+    "GS_PHYS": ("tab:red",
+                r"$\left(\big|E_1 {\bigr \rangle} + "
+                r"\big|E_{\overline{1}} {\bigr \rangle} \right) / \sqrt{2}$"),
+    "GS_CAT": ("tab:green", r"$\big|E_1 {\bigr \rangle} $"),
+    "PHYS": ("tab:orange", r"$\big|\uparrow ... \uparrow {\bigr \rangle}$"),
+    "CAT_SUM": ("tab:blue",
+                r"$\left(\big|\uparrow ... \uparrow {\bigr \rangle} + "
+                r"\big|\downarrow ... \downarrow {\bigr \rangle} "
+                r"\right)/\sqrt{2}$"),
+}
+
+
+# Accept both key forms: InitialState.name ("GS_PHYS") and InitialState.value
+# ("GS_phys", used in the result file names).
+_STATE_KEY_ALIASES = {state.value: state.name for state in InitialState}
+
+
+def _state_style(state_key: str):
+    """Return (color, label) for an initial-state key, with a plain fallback."""
+    key = _STATE_KEY_ALIASES.get(state_key, state_key)
+    return STATE_PLOT_STYLES.get(key, ("b", state_key))
 
 
 def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None):
@@ -43,39 +67,36 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
         qfi_values = [float(x) for x in simulations[state]["qfi"].tolist()]
         qfi_values[:1000] = gaussian_filter(qfi_values[:1000], sigma=1.5)
         
-        # Labels for each state
-        if state == "GS_PHYS":
-            cor = "tab:red"
-            label = (r"$\left(\big|E_1 {\bigr \rangle} + "
-                     r"\big|E_{\overline{1}} {\bigr \rangle} \right) / \sqrt{2}$")
-        elif state == "GS_CAT":
-            cor = "tab:green"
-            label = r"$\big|E_1 {\bigr \rangle} $"
-        elif state == "PHYS":
-            cor = "tab:orange"
-            label = r"$\big|\uparrow ... \uparrow {\bigr \rangle}$"
-        elif state == "CAT_SUM":
-            cor = "tab:blue"
-            label = (r"$\left(\big|\uparrow ... \uparrow {\bigr \rangle} + "
-                     r"\big|\downarrow ... \downarrow {\bigr \rangle} "
-                     r"\right)/\sqrt{2}$")
-        else:
-            cor = "b"
-            label = state
-        
+        cor, label = _state_style(state)
         ax.plot(time_points, qfi_values, "-", label=label, linewidth=3, color=cor)
     
+    frequency_mode = (getattr(simulation_params, "parameter", EstimationParameter.AMPLITUDE)
+                      == EstimationParameter.FREQUENCY)
+
     # Customize QFI subplot
-    ax.set_title(
-        rf"QFI dynamics for $N={simulation_params.N}, B/J={float(simulation_params.B / simulation_params.J):.2f}$",
-        fontsize=40)
+    title = (rf"QFI dynamics for $N={simulation_params.N}$, "
+             rf"$B/J={float(simulation_params.B / simulation_params.J):.2f}$")
+    if frequency_mode:
+        omega_resonant = 2.0 * np.pi / (int(simulation_params.freq)
+                                        * float(simulation_params.T))
+        omega_tag = (rf"\omega_0 \approx {omega_resonant:.4f}"
+                     if simulation_params.omega is None
+                     else rf"{float(simulation_params.omega):.4f}")
+        title += (rf", $h={float(simulation_params.h):g}$, $\omega={omega_tag}$")
+    ax.set_title(title, fontsize=40 if not frequency_mode else 34)
     ax.set_xlabel(r"$t / T$", fontsize=40)
-    ax.set_ylabel(r"$F_h / (N t)^2$", fontsize=40)
-    
+    ax.set_ylabel(r"$F_\omega / (N^2 t^4)$" if frequency_mode else r"$F_h / (N t)^2$",
+                  fontsize=40)
+
     ax.legend(
         title="Initial State", loc=(0.35, 0.567), fontsize=28, title_fontsize=26
     ).set_zorder(10)
-    ax.set_ylim([0, np.abs((1 - float(simulation_params.B) ** 2) * 4 / np.pi ** 2)])
+    if frequency_mode:
+        # F_omega/(N t^2)^2 spans many decades over the time window.
+        ax.set_yscale("log")
+    else:
+        # Analytic long-time plateau bound applies to amplitude estimation only.
+        ax.set_ylim([0, np.abs((1 - float(simulation_params.B) ** 2) * 4 / np.pi ** 2)])
     
     if max_time_pow is None:
         max_time_pow = int(last_time) + 1
@@ -128,5 +149,16 @@ def plot(simulations: dict, simulation_params: SimulationParams, results_dir: Pa
     fig, ax = plt.subplots(figsize=(15, 10))
     plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=MAX_TIME_POW_PLOT)
     plt.tight_layout()
+    # Frequency-mode figures get their own name so they never overwrite the
+    # amplitude-mode figure for the same N and B; the solver tag keeps the
+    # quspin and mpmath figures apart the same way.
+    frequency_mode = (getattr(simulation_params, "parameter", EstimationParameter.AMPLITUDE)
+                      == EstimationParameter.FREQUENCY)
+    mode_tag = "_Fomega" if frequency_mode else ""
+    solver = getattr(simulation_params, "solver", None)
+    solver_tag = f"_{solver.value}" if solver is not None else ""
     plt.savefig(
-        results_dir / f"qfi_dynamics_N={simulation_params.N}_B={float(simulation_params.B):.2f}.png", dpi=300)
+        results_dir / (f"qfi_dynamics{mode_tag}_N={simulation_params.N}"
+                       f"_B={float(simulation_params.B):.2f}{solver_tag}.png"), dpi=300)
+
+

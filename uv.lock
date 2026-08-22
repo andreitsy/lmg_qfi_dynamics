@@ -976,9 +976,6 @@ qiskit = [
     { name = "qiskit" },
     { name = "qiskit-ibm-runtime" },
 ]
-quspin = [
-    { name = "quspin" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -1000,12 +997,11 @@ requires-dist = [
     { name = "qiskit", marker = "extra == 'qiskit'" },
     { name = "qiskit-ibm-runtime", marker = "extra == 'qiskit'" },
     { name = "quspin", specifier = ">=1.0.0" },
-    { name = "quspin", marker = "extra == 'quspin'" },
     { name = "scipy" },
     { name = "scipy-stubs", specifier = "~=1.17.0" },
     { name = "sympy" },
 ]
-provides-extras = ["dev", "qiskit", "quspin"]
+provides-extras = ["dev", "qiskit"]
 
 [package.metadata.requires-dev]
 dev = [

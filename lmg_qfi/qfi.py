@@ -63,6 +63,50 @@ def calculate_error_estimation_mp(dket_t, ket_t):
     return error_est
 
 
+def qfi_information_from_kets(
+        ket_t: mp.matrix,
+        ket_t_p_delta: mp.matrix,
+        ket_t_m_delta: mp.matrix,
+        epsilon,
+        N: int,
+        time: int,
+        Zsum: mp.matrix,
+        Xsum: mp.matrix,
+        Ysum: mp.matrix,
+        time_power: int = 2,
+) -> QFIInformation:
+    """
+    Build a QFIInformation record from the three evolved kets |psi(theta)>,
+    |psi(theta+epsilon)>, |psi(theta-epsilon)>.
+
+    The reported qfi is the raw QFI divided by N^2 * time^time_power:
+    time_power = 2 for amplitude estimation (F_h Heisenberg scaling) and
+    time_power = 4 for frequency estimation (the generator d_omega H grows
+    linearly with time).
+    """
+    dket = dketa_t(ket_t_p_delta, ket_t_m_delta, epsilon)
+    qfi = quantum_fisher_information_mp(dket, ket_t)
+
+    if DEBUG:
+        abs_error_estimate = calculate_error_estimation_mp(dket, ket_t)
+        if abs_error_estimate > 0.1:
+            logging.warning("ABS_ERROR: %f", abs_error_estimate)
+
+    # Compute magnetizations
+    m_x = mp.re((ket_t.transpose_conj() * Xsum * ket_t)[0, 0]) / N
+    m_y = mp.re((ket_t.transpose_conj() * Ysum * ket_t)[0, 0]) / N
+    m_z = mp.re((ket_t.transpose_conj() * Zsum * ket_t)[0, 0]) / N
+
+    return QFIInformation(
+        qfi_raw_value=str(qfi),
+        qfi=float(qfi / (N ** 2 * time ** time_power)),
+        time=time,
+        m_x=float(m_x),
+        m_y=float(m_y),
+        m_z=float(m_z),
+    )
+
+
 def process_time_point_mp(
         time: int,
         params: dict,
@@ -76,41 +120,32 @@ def process_time_point_mp(
         Ysum: mp.matrix,
 ) -> QFIInformation:
     """
-    Compute observables and QFI at a given time point using mpmath arbitrary precision.
+    Compute observables and QFI over the amplitude h at a given time point
+    using mpmath arbitrary precision.
     """
     epsilon = params["epsilon"]
     N = params["N"]
     h = params["h"]
-    
+
     # Compute Floquet unitaries at different delta shifts
     floquet_unitary = calculate_unitary_at_time_mp(h, time, params, H_0, floque_u)
     floquet_unitary_p_delta = calculate_unitary_at_time_mp(h + epsilon, time, params, H_0, floque_u_p)
     floquet_unitary_m_delta = calculate_unitary_at_time_mp(h - epsilon, time, params, H_0, floque_u_m)
-    
+
     # Evolve ket
     ket_t = floquet_unitary * init_state
     ket_t_p_delta = floquet_unitary_p_delta * init_state
     ket_t_m_delta = floquet_unitary_m_delta * init_state
-    
-    # Compute derivative ket for QFI
-    dket = dketa_t(ket_t_p_delta, ket_t_m_delta, epsilon)
-    qfi = quantum_fisher_information_mp(dket, ket_t)
-    
-    if DEBUG:
-        abs_error_estimate = calculate_error_estimation_mp(dket, ket_t)
-        if abs_error_estimate > 0.1:
-            logging.warning("ABS_ERROR: %f", abs_error_estimate)
 
-    # Compute magnetizations
-    m_x = mp.re((ket_t.transpose_conj() * Xsum * ket_t)[0, 0]) / N
-    m_y = mp.re((ket_t.transpose_conj() * Ysum * ket_t)[0, 0]) / N
-    m_z = mp.re((ket_t.transpose_conj() * Zsum * ket_t)[0, 0]) / N
-
-    return QFIInformation(
-        qfi_raw_value=str(qfi),
-        qfi=float(qfi / (N ** 2 * time ** 2)),
-        time=time,
-        m_x=float(m_x),
-        m_y=float(m_y),
-        m_z=float(m_z),
+    return qfi_information_from_kets(
+        ket_t,
+        ket_t_p_delta,
+        ket_t_m_delta,
+        epsilon,
+        N,
+        time,
+        Zsum,
+        Xsum,
+        Ysum,
+        time_power=2,
     )

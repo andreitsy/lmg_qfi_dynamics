@@ -84,6 +84,7 @@ def compute_sld_info(
     ket_t: mp.matrix,
     N: int,
     time: int,
+    time_power: int = 2,
 ) -> SLDInformation:
     """
     Compute all SLD scalar observables at a single time point.
@@ -98,6 +99,9 @@ def compute_sld_info(
         Number of spins (system size).
     time : int
         Floquet period index (must be > 0).
+    time_power : int
+        Time exponent of the QFI normalization: 2 for amplitude estimation,
+        4 for frequency estimation.
 
     Returns
     -------
@@ -110,5 +114,5 @@ def compute_sld_info(
         time=time,
         L_expectation=float(L_exp),
         L_squared_expectation=float(L2_exp),
-        qfi_from_sld=float(L2_exp / (N ** 2 * time ** 2)),
+        qfi_from_sld=float(L2_exp / (N ** 2 * time ** time_power)),
     )

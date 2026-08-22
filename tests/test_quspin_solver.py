@@ -15,9 +15,13 @@ from lmg_qfi.quspin_solver import (
     get_spin_operators,
     build_h0,
     compute_floquet_unitary,
+    run_quspin,
     run_quspin_simulation,
 )
 from lmg_qfi import (
+    EstimationParameter,
+    InitialState,
+    SimulationParams,
     create_spin_xyz_operators as mp_spin_xyz,
     create_hamiltonian_h0 as mp_h0,
     calculate_unitary_T as mp_unitary_T,
@@ -232,6 +236,36 @@ class TestQuSpinSimulation:
         results = run_quspin_simulation(params, [1, 2, 3], psi0)
         # m_z should be consistent across times (non-trivial dynamics due to B field)
         assert all(r.qfi >= -1e-12 for r in results)
+
+
+# ──────────────────────────────────────────────
+# run_quspin wrapper (SimulationParams -> results per state)
+# ──────────────────────────────────────────────
+
+class TestRunQuspin:
+
+    def _simulation_params(self, N=4, h="0.0",
+                           parameter=EstimationParameter.AMPLITUDE):
+        return SimulationParams(
+            run_arguments={"dps": 15, "steps_floquet_unitary": 5,
+                           "num_points": 5, "max_time_degree": 2},
+            N=N, J=mp.mpf("1.0"), B=mp.mpf("0.4"), h=mp.mpf(h),
+            parameter=parameter,
+        )
+
+    def test_returns_all_states(self):
+        params = self._simulation_params()
+        results = run_quspin(params, list(InitialState))
+        assert set(results) == set(InitialState)
+        time_grids = [[r.time for r in state_results]
+                      for state_results in results.values()]
+        assert all(grid and grid == time_grids[0] for grid in time_grids)
+
+    def test_frequency_h_zero_raises(self):
+        params = self._simulation_params(
+            parameter=EstimationParameter.FREQUENCY)
+        with pytest.raises(ValueError, match="nonzero AC amplitude"):
+            run_quspin(params, [InitialState.PHYS])
 
 
 # ──────────────────────────────────────────────
