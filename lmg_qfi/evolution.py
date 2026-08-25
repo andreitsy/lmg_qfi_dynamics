@@ -7,6 +7,7 @@ from .operators import (
     create_spin_xyz_operators,
     create_kick_operator,
     create_v_operator,
+    compute_trig_cache,
 )
 
 
@@ -25,6 +26,7 @@ def evalution_T_step(
         p,
         t_delta,
         steps_floquet_unitary,
+        trig_cache=None,
 ):
     """
     Compute evolution of the Floquet unitary over one period.
@@ -36,7 +38,8 @@ def evalution_T_step(
 
     for t_k in linspace:
         matrix = create_v_operator(
-            H_0, Xsum, Ysum, Zsum, omega, phi_0, h, t_k, theta, varphi
+            H_0, Xsum, Ysum, Zsum, omega, phi_0, h, t_k, theta, varphi,
+            trig_cache=trig_cache,
         )
         U_step = mp.expm(-mp.j * mp.mpf(t_delta) * matrix)
         floquet_unitary = U_step * floquet_unitary
@@ -53,22 +56,31 @@ def find_power_r_mpmath(floque_u: UF, r):
     return floque_u.U * mp.diag([e ** r for e in floque_u.eigenvalues]) * floque_u.U_inv
 
 
-def calculate_unitary_at_time_mp(h, time: int, params: dict, H_0: mp.matrix, floque_u: UF):
+def calculate_unitary_at_time_mp(h, time: int, params: dict, H_0: mp.matrix, floque_u: UF,
+                                  Zsum=None, Xsum=None, Ysum=None, kick_op=None,
+                                  trig_cache=None, t_delta=None, omega=None):
     """
     Compute the Floquet unitary at a given discrete time using mpmath (arbitrary precision).
-    
+
     Returns
     -------
     floquet_unitary : mp.matrix
         The unitary operator at the given time.
     """
-    Zsum, Xsum, Ysum = create_spin_xyz_operators(params["N"])
-    t_delta = mp.mpf(params["T"]) / params["steps_floquet_unitary"]
-    omega = mp.mpf(2) * mp.pi / mp.mpf(params["nu"] * params["T"])
+    if Zsum is None or Xsum is None or Ysum is None:
+        Zsum, Xsum, Ysum = create_spin_xyz_operators(params["N"])
+    if kick_op is None:
+        kick_op = create_kick_operator(params["phi"], Xsum)
+    if trig_cache is None:
+        trig_cache = compute_trig_cache(params["theta"], params["varphi"])
+    if t_delta is None:
+        t_delta = mp.mpf(params["T"]) / params["steps_floquet_unitary"]
+    if omega is None:
+        omega = mp.mpf(2) * mp.pi / mp.mpf(params["nu"] * params["T"])
     r = time // params["nu"]
     extra_interval = range(r * params["nu"] + 1, time + 1)
     floquet_unitary = find_power_r_mpmath(floque_u, r)
-    
+
     for p in extra_interval:
         floquet_unitary = evalution_T_step(
             floquet_unitary,
@@ -85,8 +97,9 @@ def calculate_unitary_at_time_mp(h, time: int, params: dict, H_0: mp.matrix, flo
             p,
             t_delta,
             params["steps_floquet_unitary"],
+            trig_cache=trig_cache,
         )
-        floquet_unitary = create_kick_operator(params["phi"], Xsum) * floquet_unitary
+        floquet_unitary = kick_op * floquet_unitary
 
     return floquet_unitary
 
@@ -95,6 +108,8 @@ def calculate_unitary_T(
         h: mp.mpf,
         params: dict,
         H_0: mp.matrix,
+        kick_op=None,
+        trig_cache=None,
 ):
     """
     Calculate the Floquet unitary for one complete period.
@@ -110,6 +125,10 @@ def calculate_unitary_T(
     Zsum, Xsum, Ysum = create_spin_xyz_operators(n)
     t_delta = mp.mpf(T / steps_floquet_unitary)
     omega = mp.mpf(2.0) * mp.pi / (nu * T)
+    if kick_op is None:
+        kick_op = create_kick_operator(phi, Xsum)
+    if trig_cache is None:
+        trig_cache = compute_trig_cache(theta, varphi)
     floquet_unitary = mp.eye(H_0.rows)
 
     for p in range(1, nu + 1):
@@ -128,6 +147,7 @@ def calculate_unitary_T(
             p,
             t_delta,
             steps_floquet_unitary,
+            trig_cache=trig_cache,
         )
-        floquet_unitary = create_kick_operator(phi, Xsum) * floquet_unitary
+        floquet_unitary = kick_op * floquet_unitary
     return floquet_unitary

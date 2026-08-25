@@ -42,13 +42,7 @@ def create_spin_plus_operators(n):
     :return: Spin raising operator matrix (mpmath.matrix).
     """
     Sminus = create_spin_minus_operators(n)
-    Splus = Sminus.T
-
-    for i in range(n + 1):
-        for j in range(n + 1):
-            Splus[i, j] = mp.conj(Splus[i, j])
-
-    return Splus
+    return Sminus.transpose_conj()
 
 
 def create_spin_xyz_operators(n):
@@ -92,24 +86,44 @@ def create_kick_operator(phi, s_x):
     return mp.expm(-mp.j * mp.mpf(phi) * s_x)
 
 
-def ac_time(S_x, S_y, S_z, omega, phi_0, t_k, theta, varphi):
+def compute_trig_cache(theta, varphi):
+    """
+    Precompute trigonometric values for theta and varphi.
+
+    Returns
+    -------
+    tuple
+        (sin_theta, cos_theta, sin_varphi, cos_varphi)
+    """
+    theta = mp.mpc(theta)
+    varphi = mp.mpc(varphi)
+    return mp.sin(theta), mp.cos(theta), mp.sin(varphi), mp.cos(varphi)
+
+
+def ac_time(S_x, S_y, S_z, omega, phi_0, t_k, theta, varphi, trig_cache=None):
     """
     Compute the time-dependent AC field Hamiltonian.
     """
     time_factor = t_k * omega + phi_0
-    theta = mp.mpc(theta)
-    varphi = mp.mpc(varphi)
     sinusoidal_factor = mp.sin(time_factor)
+    if trig_cache is not None:
+        sin_theta, cos_theta, sin_varphi, cos_varphi = trig_cache
+    else:
+        theta = mp.mpc(theta)
+        varphi = mp.mpc(varphi)
+        sin_theta, cos_theta = mp.sin(theta), mp.cos(theta)
+        sin_varphi, cos_varphi = mp.sin(varphi), mp.cos(varphi)
     return sinusoidal_factor * (
-            mp.sin(theta) * mp.cos(varphi) * S_x +
-            mp.sin(theta) * mp.sin(varphi) * S_y +
-            mp.cos(theta) * S_z
+            sin_theta * cos_varphi * S_x +
+            sin_theta * sin_varphi * S_y +
+            cos_theta * S_z
     )
 
 
-def create_v_operator(H_0, S_x, S_y, S_z, omega, phi_0, h, t_k, theta, varphi):
+def create_v_operator(H_0, S_x, S_y, S_z, omega, phi_0, h, t_k, theta, varphi, trig_cache=None):
     """
     Create the full time-dependent Hamiltonian V(t) = H_0 + h * S_alpha(t).
     """
-    S_alpha_part = mp.mpc(h) * ac_time(S_x, S_y, S_z, omega, phi_0, t_k, theta, varphi)
+    S_alpha_part = mp.mpc(h) * ac_time(S_x, S_y, S_z, omega, phi_0, t_k, theta, varphi,
+                                        trig_cache=trig_cache)
     return H_0 + S_alpha_part
