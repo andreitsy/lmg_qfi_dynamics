@@ -232,12 +232,13 @@ about 100 times denser than the standard one: every period up to 10⁴ and
 ```bash
 uv run python fortran/scripts/dense_time_grid.py --system-size 100 times_N100.txt
 fortran/build/lmg_qfi --system-size 100 --steps 250 --times-file times_N100.txt --output-dir results/dense
-uv run python fortran/scripts/plot_results.py results/dense 100
+uv run python fortran/scripts/plot_results.py results/dense 100 --label-y 0.105
 ```
 
 `plot_results.py` draws the curves with the package's plotting function but
 reads only the solver's files, so they are not mixed with mpmath files of
-the same N. On 20 CPUs N = 60 takes 13 min for all four initial states and
+the same N; `--label-y` moves the 2π/Δ labels (default 0.155), here lower so
+that they cross the N = 100 curves less. On 20 CPUs N = 60 takes 13 min for all four initial states and
 N = 100 about 10 min per initial state (one array task each). N = 100 runs to
 t = 10²⁹, where quadruple precision is nearly exhausted: the states are
 accurate to about 2·10⁻³ at the last times (10⁻⁶ at t = 5·10²⁵), well below

@@ -22,8 +22,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import mpmath as mp  # noqa: E402
 import pandas as pd  # noqa: E402
 
+import lmg_qfi.plotting as plotting  # noqa: E402
 from lmg_qfi.config import read_defaults_args_from_config  # noqa: E402
-from lmg_qfi.plotting import plot_qfi_data_subplot  # noqa: E402
 
 STATES = ("PHYS", "CAT_SUM", "GS_CAT", "GS_PHYS")
 
@@ -36,7 +36,11 @@ def main() -> None:
     parser.add_argument("--prefix", default="fortran.", help="file prefix (default 'fortran.')")
     parser.add_argument("--output", type=Path, help="default: DATA_DIR/qfi_dynamics_N=<N>_B=<B>.png")
     parser.add_argument("--width", type=float, default=15.0, help="figure width in inches (default 15)")
+    parser.add_argument("--label-y", type=float, default=plotting.Y_LABEL_COORDINATE,
+                        help="height of the 2pi/Delta labels in units of the y axis "
+                             f"(default {plotting.Y_LABEL_COORDINATE})")
     args = parser.parse_args()
+    plotting.Y_LABEL_COORDINATE = args.label_y
 
     params = read_defaults_args_from_config()
     params.N = args.system_size
@@ -53,7 +57,7 @@ def main() -> None:
         parser.error(f"no {args.prefix}<STATE>_{label}.csv files in {args.data_dir}")
 
     fig, ax = plt.subplots(figsize=(args.width, 10))
-    plot_qfi_data_subplot(ax, simulations, params, max_time_pow=None)
+    plotting.plot_qfi_data_subplot(ax, simulations, params, max_time_pow=None)
     plt.tight_layout()
     output = args.output or args.data_dir / f"qfi_dynamics_{label}.png"
     plt.savefig(output, dpi=300)
