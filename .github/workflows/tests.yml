@@ -22,6 +22,9 @@ jobs:
         with:
           python-version-file: ".python-version"
 
+      - name: Install gfortran (Fortran solver tests)
+        run: command -v gfortran || (sudo apt-get update && sudo apt-get install -y gfortran)
+
       - name: Install dependencies
         run: uv sync --group dev
 

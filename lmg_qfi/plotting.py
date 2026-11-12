@@ -85,31 +85,39 @@ def plot_qfi_data_subplot(ax, simulations, simulation_params, max_time_pow=None)
     ax.tick_params(axis="y", labelsize=30)
     ax.grid(True, linestyle="--", alpha=0.6, linewidth=1.7)
     
-    H = create_hamiltonian_h0(simulation_params.J, simulation_params.B, simulation_params.N)
-    symmetry_edge = mp.mpf(-1 * simulation_params.B * simulation_params.N)
-    eigvals_H_real, evecs = mp.eigh(H)
-    
+    # The doublet splittings fall off exponentially with N (about 1e-28 for
+    # N = 100), far below double precision, so the spectrum is computed with
+    # 100 digits. (`mp.dps = 100` in lmg_qfi/__init__.py sets an attribute of
+    # the mpmath module, not mpmath's working precision.)
+    gap_times = []
+    with mp.workdps(100):
+        H = create_hamiltonian_h0(simulation_params.J, simulation_params.B, simulation_params.N)
+        symmetry_edge = mp.mpf(-1 * simulation_params.B * simulation_params.N)
+        eigvals_H_real, evecs = mp.eigh(H)
+
+        pairs = {}
+        for idx, eigenvalue_mp in enumerate(eigvals_H_real):
+            pair_num = idx // 2
+            if pair_num not in pairs:
+                pairs[pair_num] = []
+            pairs[pair_num].append(eigenvalue_mp)
+
+        for pair_idx, energies in pairs.items():
+            if energies[0] <= symmetry_edge and pair_idx < 7 and len(energies) == 2:
+                gap_times.append(
+                    (pair_idx, float(mp.log10(2 * mp.pi / mp.fabs(energies[1] - energies[0])))))
+
     # Add vertical lines for gap points
-    pairs = {}
-    for idx, eigenvalue_mp in enumerate(eigvals_H_real):
-        pair_num = idx // 2
-        if pair_num not in pairs:
-            pairs[pair_num] = []
-        pairs[pair_num].append(eigenvalue_mp)
-    
-    for pair_idx, energies in pairs.items():
-        if energies[0] <= symmetry_edge and pair_idx < 7:
-            if len(energies) == 2:
-                time_gap = float(mp.log10(2 * mp.pi / mp.fabs(energies[1] - energies[0])))
-                ax.axvline(x=time_gap, color='black',
-                           linestyle='--', alpha=0.7, linewidth=2)
-                ax.annotate(
-                    f"$\\frac{{2\\pi}}{{\\Delta_{{{pair_idx + 1}\\overline{{{pair_idx + 1}}}}}}}$",
-                    xy=(time_gap, Y_LABEL_COORDINATE),
-                    xytext=(time_gap * 1.03, Y_LABEL_COORDINATE),
-                    fontsize=54,
-                    color='black'
-                )
+    for pair_idx, time_gap in gap_times:
+        ax.axvline(x=time_gap, color='black',
+                   linestyle='--', alpha=0.7, linewidth=2)
+        ax.annotate(
+            f"$\\frac{{2\\pi}}{{\\Delta_{{{pair_idx + 1}\\overline{{{pair_idx + 1}}}}}}}$",
+            xy=(time_gap, Y_LABEL_COORDINATE),
+            xytext=(time_gap * 1.03, Y_LABEL_COORDINATE),
+            fontsize=54,
+            color='black'
+        )
 
 
 def plot(simulations: dict, simulation_params: SimulationParams, results_dir: Path):
