@@ -25,6 +25,11 @@ uv run python quantum_fisher_information_simulation_mpmath.py --init-state GS_ph
 
 # Generate plot from existing results
 uv run python quantum_fisher_information_simulation_mpmath.py --plot
+
+# Fortran solver (quad precision, OpenMP): build, test, run
+make -C fortran && make -C fortran test
+fortran/build/lmg_qfi --system-size 50 --steps 250 --num-points 300
+uv run pytest tests/test_fortran_solver.py -v   # builds the solver, compares with mpmath and results/
 ```
 
 ## Architecture
@@ -76,6 +81,24 @@ QFI is computed by finite differences over the probe field `h`:
 ### Configuration
 
 `parameters.ini` at project root sets defaults. CLI args override them. The `[Simulation]` section maps to `SimulationParams` fields; `phi-kick-phase = pi` is parsed as `mp.pi`.
+
+### Fortran solver (`fortran/`)
+
+Port of the mpmath simulation in `real128` with OpenMP; details in `fortran/README.md`.
+
+- Same Trotter grid, time grid and CSV columns as the Python code; output files are
+  `fortran.<STATE>_N=<N>_B=<B>.csv` (the `--plot` of the Python script reads them).
+- The h-derivative is propagated analytically (no finite difference) and `U_F^r` is applied by
+  repeated squaring (no eigen-decomposition of `U_F`). State error ≈ `(N+1)·2e-34·t·m` (m = 1 for
+  h = 0, ≈ steps otherwise); every run prints its estimate. Full double precision up to N = 50,
+  ~14 digits at the end of the N = 60 grid, ~9 digits at the end of the N = 80 grid.
+- `GS_phys` orientation is explicit (`--gs-phys-orientation up|down`); mpmath's is arbitrary.
+- The reference files in `results/` were produced with `steps=250, num-points=300` (N = 20, 40)
+  and `steps=100, num-points=50` (N = 60, 80), `dps=60`, not with the committed `parameters.ini`.
+- On a Slurm cluster build on the login node (`make -C fortran`) and submit
+  `fortran/slurm/lmg_qfi.sbatch` from a run directory `<project>/tmp/<experiment>/<run>/`.
+- `lmg_qfi/__init__.py` sets `mp.dps = 100` on the mpmath *module*, which does not change the working
+  precision (still 15 digits); code that needs more digits must use `mp.workdps`.
 
 ### Initial states
 

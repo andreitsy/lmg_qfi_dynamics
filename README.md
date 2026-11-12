@@ -116,6 +116,23 @@ uv run pytest tests/test_quspin_solver.py -v
 The test suite (53 tests) covers operator correctness, Floquet unitarity, QFI non-negativity,
 and numerical agreement with the mpmath reference for N=20.
 
+## Fortran solver (quadruple precision, OpenMP)
+
+`fortran/` holds a parallel Fortran implementation of the mpmath simulation. It reads the same
+`parameters.ini`, uses the same time grid and writes the same CSV columns, and it reproduces the
+mpmath reference files in `results/` (to the last stored digit for N = 20 and N = 40). A run for
+N = 50 with all four initial states takes a few seconds.
+
+```bash
+make -C fortran                                # needs gfortran and make
+fortran/build/lmg_qfi --system-size 50 --steps 250 --num-points 300
+uv run python quantum_fisher_information_simulation_mpmath.py --system-size 50 --plot
+```
+
+Results are saved to `results/fortran.<STATE>_N=<N>_B=<B>.csv`. Method, precision limits, validation
+against the reference files and the Slurm batch scripts are described in
+[fortran/README.md](fortran/README.md).
+
 ## Tests
 
 ```bash
