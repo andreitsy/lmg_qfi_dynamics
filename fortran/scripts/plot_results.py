@@ -39,6 +39,11 @@ def main() -> None:
     parser.add_argument("--label-y", type=float, default=plotting.Y_LABEL_COORDINATE,
                         help="height of the 2pi/Delta labels in units of the y axis "
                              f"(default {plotting.Y_LABEL_COORDINATE})")
+    parser.add_argument("--label-offset", type=float,
+                        help="put each 2pi/Delta label this many decades right of its line "
+                             "(default: 3%% of the line position)")
+    parser.add_argument("--legend-loc", type=float, nargs=2, metavar=("X", "Y"),
+                        help="lower-left corner of the legend in axes fractions (default 0.35 0.567)")
     args = parser.parse_args()
     plotting.Y_LABEL_COORDINATE = args.label_y
 
@@ -58,6 +63,11 @@ def main() -> None:
 
     fig, ax = plt.subplots(figsize=(args.width, 10))
     plotting.plot_qfi_data_subplot(ax, simulations, params, max_time_pow=None)
+    if args.label_offset is not None:
+        for text in ax.texts:  # the 2pi/Delta annotations; xy holds the position of the line
+            text.set_position((text.xy[0] + args.label_offset, text.get_position()[1]))
+    if args.legend_loc is not None:
+        ax.get_legend().set_loc(tuple(args.legend_loc))
     plt.tight_layout()
     output = args.output or args.data_dir / f"qfi_dynamics_{label}.png"
     plt.savefig(output, dpi=300)
