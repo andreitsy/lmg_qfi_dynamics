@@ -13,6 +13,7 @@ next to mpmath reference files of the same N without being mixed with them.
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 import matplotlib
@@ -42,6 +43,9 @@ def main() -> None:
     parser.add_argument("--label-offset", type=float,
                         help="put each 2pi/Delta label this many decades right of its line "
                              "(default: 3%% of the line position)")
+    parser.add_argument("--max-pairs", type=int,
+                        help="show the 2pi/Delta line and label only for the lowest K doublets "
+                             "(default: all the package draws, up to 7)")
     parser.add_argument("--legend-loc", type=float, nargs=2, metavar=("X", "Y"),
                         help="lower-left corner of the legend in axes fractions (default 0.35 0.567)")
     args = parser.parse_args()
@@ -63,8 +67,16 @@ def main() -> None:
 
     fig, ax = plt.subplots(figsize=(args.width, 10))
     plotting.plot_qfi_data_subplot(ax, simulations, params, max_time_pow=None)
-    if args.label_offset is not None:
-        for text in ax.texts:  # the 2pi/Delta annotations; xy holds the position of the line
+    for text in list(ax.texts):  # the 2pi/Delta annotations; xy holds the position of the line
+        pair = re.search(r"Delta_\{(\d+)", text.get_text())
+        if args.max_pairs is not None and pair and int(pair.group(1)) > args.max_pairs:
+            for line in list(ax.lines):  # the dashed line drawn at the same position
+                xdata = line.get_xdata()
+                if len(xdata) == 2 and xdata[0] == xdata[1] == text.xy[0]:
+                    line.remove()
+            text.remove()
+            continue
+        if args.label_offset is not None:
             text.set_position((text.xy[0] + args.label_offset, text.get_position()[1]))
     if args.legend_loc is not None:
         ax.get_legend().set_loc(tuple(args.legend_loc))

@@ -233,16 +233,18 @@ about 100 times denser than the standard one: every period up to 10⁴ and
 uv run python fortran/scripts/dense_time_grid.py --system-size 100 times_N100.txt
 fortran/build/lmg_qfi --system-size 100 --steps 250 --times-file times_N100.txt --output-dir results/dense
 uv run python fortran/scripts/plot_results.py results/dense 100 \
-    --label-y 0.15 --label-offset 0.1 --legend-loc 0.44 0.567
+    --label-y 0.16 --label-offset 0.1 --legend-loc 0.44 0.567 --max-pairs 6
 ```
 
 `plot_results.py` draws the curves with the package's plotting function but
 reads only the solver's files, so they are not mixed with mpmath files of
 the same N. `--label-y` and `--label-offset` place the 2π/Δ labels (height
 on the y axis, distance right of their line in decades; defaults 0.155 and
-3% of the line position) and `--legend-loc` the legend (lower-left corner in
-axes fractions, default 0.35 0.567). The N = 100 plot has the labels at
-0.15 and the legend in the free space right of t = 10¹²·⁵.
+3% of the line position), `--max-pairs` keeps the lines and labels of the
+lowest doublets only, and `--legend-loc` places the legend (lower-left corner
+in axes fractions, default 0.35 0.567). The N = 100 plot shows the six
+lowest doublets with their labels at 0.16, where no label crosses a curve,
+and has the legend in the free space right of t = 10¹²·⁵.
 
 On 20 CPUs N = 60 takes 13 min for all four initial states and
 N = 100 about 10 min per initial state (one array task each). N = 100 runs to
