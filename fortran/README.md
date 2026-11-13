@@ -24,7 +24,7 @@ uv run python quantum_fisher_information_simulation_mpmath.py --system-size 50 -
 ```
 
 Results go to `<output-dir>/fortran.<STATE>_N=<N>_B=<B>.csv` with the columns
-`time,m_x,m_y,m_z,qfi,qfi_raw` of the Python output (`STATE` is `PHYS`,
+`time,m_x,m_y,m_z,qfi,qfi_raw,mom_sz,mom_x,mom_y` of the Python output (`STATE` is `PHYS`,
 `GS_PHYS`, `GS_CAT` or `CAT_SUM`). `qfi_raw` carries 34 digits.
 
 ## Options
@@ -46,6 +46,26 @@ Results go to `<output-dir>/fortran.<STATE>_N=<N>_B=<B>.csv` with the columns
 Values may be decimal numbers, `pi`, or products and quotients such as `pi/2`.
 All four initial states share one Floquet operator, so running them together
 costs little more than running one.
+
+## Method of moments
+
+`mom_sz`, `mom_x`, `mom_y` are the method-of-moments sensitivities
+`(∂_h<O>)² / Var(O)`, normalised like `qfi` by `(N t)²` (so `mom_* ≤ qfi`), for
+
+- `Sz`;
+- the spin-flip parity `X = ⊗σˣ` (`|S,m> → |S,−m>`, equal to `exp(−iπSx)` up to `i^N`);
+- the dressed parity-magnetisation `Y = i Sz X`.
+
+They use the same exact `∂ψ` as the QFI: `∂_h<O> = 2 Re<(O−<O>)ψ|∂ψ>`,
+`Var(O) = ‖(O−<O>)ψ‖²`. If ψ is an eigenstate of O (for example X on the
+parity-symmetric `GS_cat` and `CatSum` at h = 0), the ratio is 0/0 and its
+h → 0 limit `4 <∂ψ|D|∂ψ>² / ‖D∂ψ‖²`, `D = O − <O>`, is written instead
+(see `method_of_moments` in `lmg_dynamics.f90`; the Python version is
+`lmg_qfi/mom.py`). Plot them with
+
+```bash
+uv run python fortran/scripts/plot_results.py results/mom 40 --mom
+```
 
 ## Method
 

@@ -6,6 +6,7 @@ import mpmath as mp
 from .config import QFIInformation, UF
 from .operators import create_spin_xyz_operators
 from .evolution import calculate_unitary_at_time_mp
+from .mom import method_of_moments_mp
 
 DEBUG = True
 
@@ -74,9 +75,13 @@ def process_time_point_mp(
         Zsum: mp.matrix,
         Xsum: mp.matrix,
         Ysum: mp.matrix,
+        mom_observables: dict = None,
 ) -> QFIInformation:
     """
     Compute observables and QFI at a given time point using mpmath arbitrary precision.
+
+    ``mom_observables`` maps "Sz", "X", "Y" to operators (see ``lmg_qfi.mom``); for each one
+    present the method-of-moments sensitivity is computed, normalized like the QFI.
     """
     epsilon = params["epsilon"]
     N = params["N"]
@@ -106,6 +111,11 @@ def process_time_point_mp(
     m_y = mp.re((ket_t.transpose_conj() * Ysum * ket_t)[0, 0]) / N
     m_z = mp.re((ket_t.transpose_conj() * Zsum * ket_t)[0, 0]) / N
 
+    norm = N ** 2 * time ** 2
+    mom = {}
+    for name, O in (mom_observables or {}).items():
+        mom[f"mom_{name.lower()}"] = float(method_of_moments_mp(O, ket_t, dket) / norm)
+
     return QFIInformation(
         qfi_raw_value=str(qfi),
         qfi=float(qfi / (N ** 2 * time ** 2)),
@@ -113,4 +123,5 @@ def process_time_point_mp(
         m_x=float(m_x),
         m_y=float(m_y),
         m_z=float(m_z),
+        **mom,
     )

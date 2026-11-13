@@ -46,6 +46,10 @@ class QFIInformation:
     qfi: float
     time: float
     qfi_raw_value: str
+    # Method-of-moments sensitivity, normalized like ``qfi`` (MoM / (N t)^2)
+    mom_sz: float = float("nan")
+    mom_x: float = float("nan")
+    mom_y: float = float("nan")
 
 
 @dataclass
