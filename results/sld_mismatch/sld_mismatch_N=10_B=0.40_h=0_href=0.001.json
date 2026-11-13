@@ -1,0 +1,89 @@
+{
+  "system_size": 10,
+  "J": "1",
+  "B": "0.4",
+  "T": "1",
+  "kick_phase": "pi",
+  "h_reference": "0.001",
+  "h_target": "0",
+  "dps": 50,
+  "steps": 100,
+  "gs_phys_orientation": "positive Sz",
+  "sld": "canonical pure-state, zero kernel-kernel block",
+  "normalization": "(N t)^2",
+  "time_points": 2239,
+  "diagnostics": {
+    "max_norm_error": 9.395676695975499e-46,
+    "max_normalized_tangent_defect": 4.450616993479698e-22,
+    "max_sld_hermiticity_error": 0.0,
+    "max_local_relative_error": 8.50681630944652e-48,
+    "max_reference_matched_relative_error": 3.404038545170675e-48,
+    "max_relative_bound_excess": 0.0,
+    "max_fixed_observable_fd_relative_error": 2.019968004429789e-27,
+    "elapsed_seconds": 142.5119744159747,
+    "max_normalized_mismatch": {
+      "GS_PHYS": 0.06707593262629855,
+      "GS_CAT": 0.23408877313856294,
+      "PHYS": 0.09854020586379225,
+      "CAT_SUM": 0.11740707284528566
+    },
+    "convergence": {
+      "times": [
+        1,
+        10,
+        100,
+        300,
+        1000,
+        3000,
+        6000,
+        10000
+      ],
+      "reference_steps": 100,
+      "refined_steps": 200,
+      "precision": {
+        "GS_PHYS": {
+          "qfi": 0.0,
+          "mom_sld_ref": 0.0,
+          "mom_sld_local": 0.0
+        },
+        "GS_CAT": {
+          "qfi": 0.0,
+          "mom_sld_ref": 0.0,
+          "mom_sld_local": 0.0
+        },
+        "PHYS": {
+          "qfi": 0.0,
+          "mom_sld_ref": 0.0,
+          "mom_sld_local": 0.0
+        },
+        "CAT_SUM": {
+          "qfi": 0.0,
+          "mom_sld_ref": 0.0,
+          "mom_sld_local": 0.0
+        }
+      },
+      "trotter": {
+        "GS_PHYS": {
+          "qfi": 0.00906918480706849,
+          "mom_sld_ref": 0.0014256597365187311,
+          "mom_sld_local": 0.00906918480706849
+        },
+        "GS_CAT": {
+          "qfi": 0.010226336827336075,
+          "mom_sld_ref": 0.010226324113792486,
+          "mom_sld_local": 0.010226336827336075
+        },
+        "PHYS": {
+          "qfi": 0.010162820800342753,
+          "mom_sld_ref": 0.007575564890710026,
+          "mom_sld_local": 0.010162820800342753
+        },
+        "CAT_SUM": {
+          "qfi": 0.010055226943343066,
+          "mom_sld_ref": 0.010055217929505622,
+          "mom_sld_local": 0.010055226943343066
+        }
+      }
+    }
+  }
+}

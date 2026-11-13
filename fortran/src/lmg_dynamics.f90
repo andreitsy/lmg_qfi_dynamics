@@ -4,12 +4,13 @@ module lmg_dynamics
    use, intrinsic :: iso_fortran_env, only: int64
    use lmg_kinds, only: wp, dp, ik
    use lmg_linalg, only: unitarity_defect
-   use lmg_operators, only: lmg_model, ladder_coefficients, magnetization
+   use lmg_operators, only: lmg_model, ladder_coefficients, magnetization, apply_mom_observable, &
+                            obs_sz, obs_x, obs_y
    use lmg_floquet, only: floquet_ops, power_table, build_floquet, build_power_table, propagate
    implicit none
    private
 
-   public :: qfi_point, qfi_diagnostics, qfi_dynamics, evaluate_point, wall_time
+   public :: qfi_point, qfi_diagnostics, qfi_dynamics, evaluate_point, method_of_moments, wall_time
 
    !> One row of the output table.
    type :: qfi_point
@@ -19,6 +20,9 @@ module lmg_dynamics
       real(wp) :: mz = 0.0_wp        !< <Sz>/N
       real(wp) :: qfi = 0.0_wp       !< F_h/(N t)^2
       real(wp) :: qfi_raw = 0.0_wp   !< F_h
+      real(wp) :: mom_sz = 0.0_wp    !< method of moments for Sz,        / (N t)^2
+      real(wp) :: mom_x = 0.0_wp     !< method of moments for parity X,  / (N t)^2
+      real(wp) :: mom_y = 0.0_wp     !< method of moments for Y = i Sz X, / (N t)^2
    end type qfi_point
 
    !> Accuracy indicators and wall-clock timings of a run.
@@ -86,6 +90,14 @@ contains
          point%qfi = 0.0_wp
       end if
       call magnetization(nspins, c, psi, point%mx, point%my, point%mz)
+      point%mom_sz = method_of_moments(nspins, obs_sz, psi, dpsi)
+      point%mom_x = method_of_moments(nspins, obs_x, psi, dpsi)
+      point%mom_y = method_of_moments(nspins, obs_y, psi, dpsi)
+      if (t > 0_ik) then
+         point%mom_sz = point%mom_sz/(real(nspins, wp)*real(t, wp))**2
+         point%mom_x = point%mom_x/(real(nspins, wp)*real(t, wp))**2
+         point%mom_y = point%mom_y/(real(nspins, wp)*real(t, wp))**2
+      end if
 
       norm_error = abs(real(dot_product(psi, psi), wp) - 1.0_wp)
       overlap_error = 0.0_wp
@@ -93,6 +105,40 @@ contains
       amplification = 0.0_wp
       if (perp2 > 1.0e-30_wp*dnorm2) amplification = sqrt(dnorm2/perp2)
    end subroutine evaluate_point
+
+   !> Method-of-moments sensitivity (d<O>/dh)^2 / Var(O) of a normalised state
+   !> (unnormalised; bounded by F_h).
+   !>
+   !> With D = O - <O>: Var(O) = ||D psi||^2 and d<O>/dh = 2 Re <D psi|dpsi>
+   !> (Re <psi|dpsi> = 0). If psi is an eigenstate of O (Var(O) below 1e-20 of
+   !> max(<O^2>, 1), i.e. zero up to rounding), the ratio is 0/0 and its
+   !> h -> h0 limit 4 <dpsi|D|dpsi>^2 / ||D dpsi||^2 is returned instead; this
+   !> happens for the parity X of parity-symmetric states at h = 0.
+   pure function method_of_moments(nspins, obs, psi, dpsi) result(mom)
+      integer, intent(in)     :: nspins, obs
+      complex(wp), intent(in) :: psi(:), dpsi(:)
+      real(wp) :: mom
+      real(wp), parameter :: var_rel_tol = 1.0e-20_wp
+      complex(wp) :: opsi(size(psi)), odpsi(size(psi))
+      real(wp) :: mean, second, var, signal, num, den
+
+      call apply_mom_observable(nspins, obs, psi, opsi)
+      mean = real(dot_product(psi, opsi), wp)
+      second = real(dot_product(opsi, opsi), wp)
+      opsi = opsi - mean*psi
+      var = real(dot_product(opsi, opsi), wp)
+      if (var > var_rel_tol*max(second, 1.0_wp)) then
+         signal = 2.0_wp*real(dot_product(opsi, dpsi), wp)
+         mom = signal**2/var
+         return
+      end if
+      call apply_mom_observable(nspins, obs, dpsi, odpsi)
+      odpsi = odpsi - mean*dpsi
+      num = real(dot_product(dpsi, odpsi), wp)
+      den = real(dot_product(odpsi, odpsi), wp)
+      mom = 0.0_wp
+      if (den > 0.0_wp) mom = 4.0_wp*num**2/den
+   end function method_of_moments
 
    !> Run the whole calculation for normalised initial states psi0(:, s).
    !>

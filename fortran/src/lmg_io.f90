@@ -1,7 +1,7 @@
 !> Result files and number formatting.
 !>
 !> The CSV layout is the one written by the Python package
-!> (`time,m_x,m_y,m_z,qfi,qfi_raw`), so the files can be loaded, compared
+!> (`time,m_x,m_y,m_z,qfi,qfi_raw,mom_sz,mom_x,mom_y`), so the files can be loaded, compared
 !> and plotted with the existing tooling.
 module lmg_io
    use lmg_kinds, only: wp, dp, ik
@@ -81,14 +81,17 @@ contains
       raw_digits = precision(1.0_wp) + 1
       open (newunit=unit, file=path, status='replace', action='write', iostat=ierr)
       if (ierr /= 0) return
-      write (unit, '(a)') 'time,m_x,m_y,m_z,qfi,qfi_raw'
+      write (unit, '(a)') 'time,m_x,m_y,m_z,qfi,qfi_raw,mom_sz,mom_x,mom_y'
       do i = 1, size(points)
          write (unit, '(a)') format_time(points(i)%time)//','// &
             format_real(points(i)%mx, 17)//','// &
             format_real(points(i)%my, 17)//','// &
             format_real(points(i)%mz, 17)//','// &
             format_real(points(i)%qfi, 17)//','// &
-            format_real(points(i)%qfi_raw, raw_digits)
+            format_real(points(i)%qfi_raw, raw_digits)//','// &
+            format_real(points(i)%mom_sz, 17)//','// &
+            format_real(points(i)%mom_x, 17)//','// &
+            format_real(points(i)%mom_y, 17)
       end do
       close (unit)
    end subroutine write_csv

@@ -133,6 +133,52 @@ Results are saved to `results/fortran.<STATE>_N=<N>_B=<B>.csv`. Method, precisio
 against the reference files and the Slurm batch scripts are described in
 [fortran/README.md](fortran/README.md).
 
+## SLD calibration mismatch
+
+The symmetric logarithmic derivative (SLD) is a locally optimal observable. To
+test calibration error, construct the canonical pure-state SLD at
+`h_ref = 0.001`, then measure it on the state evolved at `h = 0`:
+
+```math
+\mathcal{M}_0[L_{h_{\rm ref}}]
+=\left.\frac{\bigl(2\operatorname{Re}\langle\psi_h|L_{h_{\rm ref}}|
+\partial_h\psi_h\rangle\bigr)^2}
+{\langle L_{h_{\rm ref}}^2\rangle_h-\langle L_{h_{\rm ref}}\rangle_h^2}\right|_{h=0}.
+```
+
+The observable is held fixed when taking the derivative at the target field.
+It is constructed separately for each initial state and time, so this study
+does not assume a single time-independent measurement. The same initial ket
+is used at both fields. The canonical choice is `L = 2 ∂ρ`, with a zero block
+within the kernel of the calibration density matrix; other SLD extensions
+can behave differently away from calibration.
+
+The separate four-panel figure compares this sensitivity with the QFI at
+`h = 0` and the matched observable `L_0`, which provides the local saturation
+check. All curves use the common normalization `(N t)^2`.
+
+```bash
+uv run python scripts/plot_sld_mismatch.py --check-convergence
+```
+
+The defaults are `N=10`, `B/J=0.4`, 50-digit arithmetic, 100 integration
+steps per kick period, and integer times through `t/T=10000`. The grid
+combines logarithmic sampling with a maximum five-period spacing.
+CSV data, numerical diagnostics in JSON, and a 300-dpi PNG with a vector PDF
+are written to `results/sld_mismatch/`. `--check-convergence` compares selected
+times at 60 digits and at 200 integration steps. `--steps`, `--dps`,
+`--h-reference`, `--h-target`, and `--output-dir` allow separate studies.
+The original N=10 MoM files used only 10 integration steps; the new study
+recomputes its own target QFI for a consistent comparison.
+
+For the committed run, the matched SLD agrees with QFI to better than
+`9e-48` relative error, and no calibrated MoM value exceeds the target QFI.
+The 50- and 60-digit checks give identical stored double-precision values.
+At the eight checked times, doubling the integration steps changes the
+normalized sensitivities by at most 1.03% of each state's peak normalized
+QFI. This is a discretization check, not a uniform relative-error bound at
+small sensitivities or a continuum-limit extrapolation.
+
 ## Tests
 
 ```bash

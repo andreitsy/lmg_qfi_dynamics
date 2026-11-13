@@ -24,7 +24,7 @@ uv run python quantum_fisher_information_simulation_mpmath.py --system-size 50 -
 ```
 
 Results go to `<output-dir>/fortran.<STATE>_N=<N>_B=<B>.csv` with the columns
-`time,m_x,m_y,m_z,qfi,qfi_raw` of the Python output (`STATE` is `PHYS`,
+`time,m_x,m_y,m_z,qfi,qfi_raw,mom_sz,mom_x,mom_y` of the Python output (`STATE` is `PHYS`,
 `GS_PHYS`, `GS_CAT` or `CAT_SUM`). `qfi_raw` carries 34 digits.
 
 ## Options
@@ -46,6 +46,53 @@ Results go to `<output-dir>/fortran.<STATE>_N=<N>_B=<B>.csv` with the columns
 Values may be decimal numbers, `pi`, or products and quotients such as `pi/2`.
 All four initial states share one Floquet operator, so running them together
 costs little more than running one.
+
+## Method of moments
+
+`mom_sz`, `mom_x`, `mom_y` are the method-of-moments sensitivities
+`(∂_h<O>)² / Var(O)`, normalised like `qfi` by `(N t)²` (so `mom_* ≤ qfi`), for
+
+- `Sz`;
+- the spin-flip parity `X = ⊗σˣ` (`|S,m> → |S,−m>`, equal to `exp(−iπSx)` up to `i^N`);
+- the dressed parity-magnetisation `Y = i Sz X`.
+
+They use the same exact `∂ψ` as the QFI: `∂_h<O> = 2 Re<(O−<O>)ψ|∂ψ>`,
+`Var(O) = ‖(O−<O>)ψ‖²`. If ψ is an eigenstate of O (for example X on the
+parity-symmetric `GS_cat` and `CatSum` at h = 0), the ratio is 0/0 and its
+h → 0 limit `4 <∂ψ|D|∂ψ>² / ‖D∂ψ‖²`, `D = O − <O>`, is written instead
+(see `method_of_moments` in `lmg_dynamics.f90`; the Python version is
+`lmg_qfi/mom.py`). Plot them with
+
+```bash
+uv run python fortran/scripts/plot_results.py results/mom 40 --mom
+
+# Choose the figure width and output location; PNG also writes a vector PDF.
+uv run python fortran/scripts/plot_results.py results/mom 40 --mom --width 18 --output results/mom/mom_N40.png
+
+# Regenerate the mpmath N = 10 figure using only its CSV files.
+uv run python fortran/scripts/plot_results.py results 10 --mom --prefix InitialState.
+```
+
+The MoM figure uses LaTeX and Computer Modern typography, with one panel per
+initial state and a shared legend. It denotes the sensitivity by
+
+```math
+\mathcal{M}_h[\hat O] = \frac{(\partial_h\langle\hat O\rangle)^2}
+                              {\operatorname{Var}(\hat O)}.
+```
+
+Both $F_h$ and $\mathcal{M}_h[\hat O]$ are plotted with the common
+normalization $(Nt)^2$. The curves use the raw CSV values without smoothing.
+Dashed vertical markers identify the low-lying doublet gap times
+$2\pi/\Delta_{k\overline{k}}$, computed from the spectrum of $H_0$ with
+100-digit precision. Sparse powers-of-ten ticks keep the long time axes
+readable.
+
+The default MoM output is `qfi_mom_dynamics_N=<N>_B=<B>.png` at 300 dpi,
+with a companion vector PDF of the same name. Use `--output figure.pdf`
+to save only a PDF. `--width` sets the figure width in inches; its default
+is 18 for MoM and 15 for the original QFI plot. Rendering requires LaTeX
+and `dvipng`, as for the existing QFI figures.
 
 ## Method
 

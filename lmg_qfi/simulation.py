@@ -10,6 +10,7 @@ from .config import InitialState, SimulationParams, QFIInformation, UF
 from .operators import create_spin_xyz_operators, create_hamiltonian_h0
 from .evolution import calculate_unitary_T
 from .qfi import process_time_point_mp
+from .mom import create_mom_observables
 
 
 def generate_time_interval(num_points: int, max_degree: int) -> list:
@@ -65,6 +66,7 @@ def simulation_with_AC_field_mp(
     h = params["h"]
     epsilon = params["epsilon"]
     Zsum, Xsum, Ysum = create_spin_xyz_operators(params["N"])
+    mom_observables = create_mom_observables(Zsum)
     H_0 = create_hamiltonian_h0(params["J"], params["B"], params["N"])
 
     fu_eigenvalues, fu_eigenvectors = mp.eig(calculate_unitary_T(h, params, H_0))
@@ -91,6 +93,7 @@ def simulation_with_AC_field_mp(
             Zsum,
             Xsum,
             Ysum,
+            mom_observables,
         )
         if i % 10 == 0:
             logging.info(f"{i / len(time_interval) * 100.0:.2f}%: "
