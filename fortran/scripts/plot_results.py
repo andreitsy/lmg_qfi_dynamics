@@ -8,6 +8,7 @@ behind `quantum_fisher_information_simulation_mpmath.py --plot`. Unlike
 next to mpmath reference files of the same N without being mixed with them.
 
     uv run python fortran/scripts/plot_results.py results/dense 100
+    uv run python fortran/scripts/plot_results.py results/mom 40 --mom   # QFI + method of moments
 """
 
 from __future__ import annotations
@@ -36,6 +37,9 @@ def main() -> None:
     parser.add_argument("--x-coupling", default="0.4", help="B (default 0.4)")
     parser.add_argument("--prefix", default="fortran.", help="file prefix (default 'fortran.')")
     parser.add_argument("--output", type=Path, help="default: DATA_DIR/qfi_dynamics_N=<N>_B=<B>.png")
+    parser.add_argument("--mom", action="store_true",
+                        help="plot QFI and method of moments (Sz, X, Y), one panel per state, "
+                             "to DATA_DIR/qfi_mom_dynamics_N=<N>_B=<B>.png")
     parser.add_argument("--width", type=float, default=15.0, help="figure width in inches (default 15)")
     parser.add_argument("--label-y", type=float, default=plotting.Y_LABEL_COORDINATE,
                         help="height of the 2pi/Delta labels in units of the y axis "
@@ -64,6 +68,13 @@ def main() -> None:
             print(f"{path}: {len(simulations[state])} points")
     if not simulations:
         parser.error(f"no {args.prefix}<STATE>_{label}.csv files in {args.data_dir}")
+
+    if args.mom:
+        output = plotting.plot_qfi_mom(simulations, params, args.data_dir)
+        if output is None:
+            parser.error("the files have no mom_* columns; rerun the solver")
+        print(f"saved {output}")
+        return
 
     fig, ax = plt.subplots(figsize=(args.width, 10))
     plotting.plot_qfi_data_subplot(ax, simulations, params, max_time_pow=None)

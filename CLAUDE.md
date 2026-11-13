@@ -58,7 +58,8 @@ parameters.ini / CLI args
                 └── process_time_point_mp()  → QFIInformation per time step
                         ├── calculate_unitary_at_time_mp()  → U(t) via find_power_r_mpmath()
                         ├── quantum_fisher_information_mp() → QFI via finite differences
-                        └── compute_sld_info()              → SLD cross-check (optional)
+                        ├── compute_sld_info()              → SLD cross-check (optional)
+                        └── method_of_moments_mp()          → MoM for Sz, X, Y (lmg_qfi/mom.py)
 ```
 
 ### Key operator conventions
@@ -73,6 +74,14 @@ QFI is computed by finite differences over the probe field `h`:
 - Compute `U_F(h)`, `U_F(h+ε)`, `U_F(h-ε)` — each stored as a `UF` eigendecomposition
 - `dket = (U(h+ε)|ψ₀⟩ - U(h-ε)|ψ₀⟩) / (2ε)`
 - `QFI = 4(⟨∂ψ|∂ψ⟩ - |⟨ψ|∂ψ⟩|²)`, normalized as `QFI / (N² t²)`
+
+### Method of moments
+
+`lmg_qfi/mom.py`: `MoM = (∂_h<O>)²/Var(O)` for `Sz`, parity `X = ⊗σˣ` (anti-diagonal in the Dicke
+basis) and `Y = i Sz X`, from the same `dket` as the QFI, normalized by `(N t)²` → CSV columns
+`mom_sz, mom_x, mom_y` (also written by the Fortran solver). If the state is an eigenstate of `O`
+(Var = 0, e.g. X on GS_CAT/CAT_SUM at h = 0) the finite h → 0 limit is used. `--plot` also writes
+`qfi_mom_dynamics_N=…png` (one panel per state) when the CSVs have these columns.
 
 ### Precision control
 

@@ -160,7 +160,8 @@ class TestSaveToFileQFIDynamics:
             save_to_file_qfi_dynamics(results, output_file)
             
             df = pd.read_csv(output_file)
-            expected_columns = ["time", "m_x", "m_y", "m_z", "qfi", "qfi_raw"]
+            expected_columns = ["time", "m_x", "m_y", "m_z", "qfi", "qfi_raw",
+                                "mom_sz", "mom_x", "mom_y"]
             assert list(df.columns) == expected_columns
         finally:
             os.unlink(output_file)
