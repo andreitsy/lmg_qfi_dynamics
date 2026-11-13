@@ -14,7 +14,7 @@ from .operators import create_hamiltonian_h0
 # Matplotlib configuration
 mpl.rcParams["text.usetex"] = True
 mpl.rcParams["font.family"] = "serif"
-mpl.rcParams["font.serif"] = ["Computer Modern"]
+mpl.rcParams["font.serif"] = ["Computer Modern Roman"]
 mpl.rcParams["text.latex.preamble"] = r"\usepackage{amsmath,amsfonts,amssymb}"
 
 MAX_TIME_POW_PLOT = None
@@ -262,6 +262,89 @@ def plot_qfi_mom(
                         wspace=0.075, hspace=0.28)
     out = Path(output) if output is not None else results_dir / (
         f"qfi_mom_dynamics_N={simulation_params.N}_B={float(simulation_params.B):.2f}.png")
+    fig.savefig(out, dpi=300)
+    if out.suffix.lower() == ".png":
+        fig.savefig(out.with_suffix(".pdf"))
+    plt.close(fig)
+    return out
+
+
+def plot_sld_mismatch(
+    simulations: dict,
+    simulation_params: SimulationParams,
+    results_dir: Path,
+    *,
+    h_reference="0.001",
+    h_target="0",
+    output: Path | None = None,
+):
+    """Compare a calibrated SLD observable with the local SLD and QFI.
+
+    Each frame contains ``time``, ``qfi``, ``mom_sld_ref`` and ``mom_sld_local``;
+    all three sensitivities are already normalized by (N t)^2. The calibrated
+    operator depends on time and initial state, but is fixed under the target
+    field derivative. Export the unsmoothed samples to PNG and vector PDF.
+    """
+    states = [state for state in STATE_TITLES if state in simulations]
+    if not states:
+        return None
+    fig, axes = plt.subplots(2, 2, figsize=(18, 15), sharex=True, sharey=True)
+    first_time = min(np.log10(simulations[s]["time"].to_numpy(dtype=float)).min() for s in states)
+    last_time = max(np.log10(simulations[s]["time"].to_numpy(dtype=float)).max() for s in states)
+    max_value = max(simulations[s][["qfi", "mom_sld_ref", "mom_sld_local"]].max().max()
+                    for s in states)
+    tick_step = max(1, int(np.ceil((last_time - first_time) / 6)))
+    ticks = np.arange(np.ceil(first_time), np.floor(last_time) + 1, tick_step)
+    gaps = compute_gap_times(simulation_params)
+    for panel, (ax, state) in enumerate(zip(axes.flat, states)):
+        df = simulations[state]
+        log_t = np.log10(df["time"].to_numpy(dtype=float))
+        ax.plot(log_t, df["qfi"], color="0.35", linewidth=5, label=r"QFI, $F_h$", zorder=3)
+        ax.plot(log_t, df["mom_sld_local"], color="tab:orange", linestyle="--", linewidth=3,
+                label=r"Matched SLD, $\mathcal{M}[\hat L_h]$", zorder=4)
+        ax.plot(log_t, df["mom_sld_ref"], color="tab:blue", linewidth=2.5,
+                label=r"Calibrated SLD, $\mathcal{M}[\hat L_{h_{\rm ref}}]$", zorder=5)
+        for pair_idx, gap in gaps:
+            if first_time <= gap <= last_time:
+                ax.axvline(gap, color="0.25", linestyle="--", linewidth=1.5, alpha=0.6)
+                if panel == 0:
+                    k = pair_idx + 1
+                    ax.annotate(rf"$\frac{{2\pi}}{{\Delta_{{{k}\overline{{{k}}}}}}}$",
+                                xy=(gap, 0.9), xycoords=("data", "axes fraction"),
+                                xytext=(4, 0), textcoords="offset points", fontsize=24,
+                                ha="left", va="top",
+                                bbox={"facecolor": "white", "edgecolor": "none", "pad": 1})
+        ax.set_title(STATE_TITLES[state], fontsize=30, pad=14)
+        ax.text(0.02, 1.03, rf"\textbf{{({chr(97 + panel)})}}", transform=ax.transAxes,
+                fontsize=23, va="bottom")
+        ax.set_xticks(ticks, [rf"$10^{{{int(t)}}}$" for t in ticks])
+        ax.set_ylim(0, 1.1 * max_value)
+        ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=5, min_n_ticks=3))
+        ax.tick_params(labelsize=24, length=6, pad=7)
+        ax.set_axisbelow(True)
+        ax.grid(True, linestyle="--", alpha=0.35)
+        ax.margins(x=0.025)
+        if panel + 2 >= len(states):
+            ax.tick_params(axis="x", labelbottom=True)
+    for ax in axes.flat[len(states):]:
+        ax.set_visible(False)
+    fig.suptitle(r"Sensitivity of a calibrated SLD observable", fontsize=34, y=0.99)
+    fig.text(0.53, 0.935,
+             rf"$N={simulation_params.N},\quad B/J={float(simulation_params.B / simulation_params.J):.2f},"
+             rf"\quad h={h_target},\quad h_{{\rm ref}}={h_reference}$", fontsize=26, ha="center")
+    handles, labels = axes.flat[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.53, 0.91),
+               ncol=3, frameon=False, fontsize=23, handlelength=3, columnspacing=1.3)
+    fig.supxlabel(r"$t / T$", fontsize=34, y=0.055)
+    fig.supylabel(r"$F_h/(Nt)^2,\quad \mathcal{M}/(Nt)^2$", fontsize=32, x=0.015)
+    fig.text(0.53, 0.015, r"$\mathcal{M}[\hat O]=(\partial_h\langle\hat O\rangle)^2/"
+             r"\mathrm{Var}(\hat O)$, with $\hat O$ held fixed under $\partial_h$",
+             fontsize=21, ha="center")
+    fig.subplots_adjust(left=0.105, right=0.985, bottom=0.14, top=0.79,
+                        wspace=0.075, hspace=0.28)
+    out = Path(output) if output is not None else results_dir / (
+        f"sld_mismatch_N={simulation_params.N}_B={float(simulation_params.B):.2f}"
+        f"_h={h_target}_href={h_reference}.png")
     fig.savefig(out, dpi=300)
     if out.suffix.lower() == ".png":
         fig.savefig(out.with_suffix(".pdf"))
