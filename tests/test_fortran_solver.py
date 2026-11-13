@@ -93,7 +93,7 @@ def test_command_line(solver: Path, tmp_path: Path):
     assert files == ["run1.CAT_SUM_N=4_B=0.25.csv", "run1.PHYS_N=4_B=0.25.csv"]
     with (tmp_path / "out" / files[0]).open() as handle:
         rows = list(csv.DictReader(handle))
-    assert list(rows[0]) == ["time", "m_x", "m_y", "m_z", "qfi", "qfi_raw"]
+    assert list(rows[0]) == ["time", "m_x", "m_y", "m_z", "qfi", "qfi_raw", "mom_sz", "mom_x", "mom_y"]
     assert len(rows) == 99 + 2 * 3 and rows[-1]["time"] == "100000"
 
 
@@ -125,6 +125,8 @@ def test_matches_mpmath_default_setup(solver: Path, tmp_path: Path, n_spins: int
         assert max(res["m_x"], res["m_y"], res["m_z"]) < 1e-14, (state, res)
         assert res["qfi"] < 1e-14, (state, res)
         assert res["qfi_raw"] < 1e-14, (state, res)
+        for name in ("mom_sz", "mom_x", "mom_y"):
+            assert res[name] < 1e-14, (state, name, res)
 
 
 def test_matches_mpmath_tilted_probe(solver: Path, tmp_path: Path):

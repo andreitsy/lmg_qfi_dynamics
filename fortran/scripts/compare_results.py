@@ -14,7 +14,9 @@ of each column:
 * ``qfi``: deviation relative to the largest value of the column, so that
   zero crossings of the curve do not inflate the number;
 * ``qfi_raw``: point-wise relative deviation, evaluated with mpmath because
-  the reference stores up to 60 digits.
+  the reference stores up to 60 digits;
+* ``mom_sz, mom_x, mom_y`` (method of moments, when both files have them):
+  deviation relative to the largest ``qfi`` of the file (MoM <= QFI).
 
 ``GS_PHYS`` is defined up to the Z2 symmetry of the model (the sign of the
 superposition of the two lowest states): if the candidate uses the other
@@ -87,6 +89,11 @@ def compare_files(ref_path: Path, new_path: Path, atol_m: float = 1e-12) -> dict
             if denom > 0:
                 worst = max(worst, abs(a - b) / denom)
         out["qfi_raw"] = float(worst)
+
+    # method of moments (only if both files have it), normalised like qfi
+    for name in ("mom_sz", "mom_x", "mom_y"):
+        if name in ref[0] and name in new[0]:
+            out[name] = max_abs(column(ref, name), column(new, name)) / scale
     return out
 
 
