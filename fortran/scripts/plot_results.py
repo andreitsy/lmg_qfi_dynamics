@@ -35,11 +35,14 @@ def main() -> None:
     parser.add_argument("system_size", type=int)
     parser.add_argument("--x-coupling", default="0.4", help="B (default 0.4)")
     parser.add_argument("--prefix", default="fortran.", help="file prefix (default 'fortran.')")
-    parser.add_argument("--output", type=Path, help="default: DATA_DIR/qfi_dynamics_N=<N>_B=<B>.png")
+    parser.add_argument("--output", type=Path,
+                        help="output path (PNG or PDF for --mom); default: "
+                             "DATA_DIR/qfi[_mom]_dynamics_N=<N>_B=<B>.png")
     parser.add_argument("--mom", action="store_true",
                         help="plot QFI and method of moments (Sz, X, Y), one panel per state, "
                              "to DATA_DIR/qfi_mom_dynamics_N=<N>_B=<B>.png")
-    parser.add_argument("--width", type=float, default=15.0, help="figure width in inches (default 15)")
+    parser.add_argument("--width", type=float, default=None,
+                        help="figure width in inches (default: 15 for QFI, 18 for --mom)")
     args = parser.parse_args()
 
     params = read_defaults_args_from_config()
@@ -57,13 +60,17 @@ def main() -> None:
         parser.error(f"no {args.prefix}<STATE>_{label}.csv files in {args.data_dir}")
 
     if args.mom:
-        output = plot_qfi_mom(simulations, params, args.data_dir)
+        output = plot_qfi_mom(simulations, params, args.data_dir,
+                              width=args.width if args.width is not None else 18.0,
+                              output=args.output)
         if output is None:
             parser.error("the files have no mom_* columns; rerun the solver")
         print(f"saved {output}")
+        if output.suffix.lower() == ".png":
+            print(f"saved {output.with_suffix('.pdf')}")
         return
 
-    fig, ax = plt.subplots(figsize=(args.width, 10))
+    fig, ax = plt.subplots(figsize=(args.width if args.width is not None else 15.0, 10))
     plot_qfi_data_subplot(ax, simulations, params, max_time_pow=None)
     plt.tight_layout()
     output = args.output or args.data_dir / f"qfi_dynamics_{label}.png"

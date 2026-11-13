@@ -65,7 +65,34 @@ h → 0 limit `4 <∂ψ|D|∂ψ>² / ‖D∂ψ‖²`, `D = O − <O>`, is writte
 
 ```bash
 uv run python fortran/scripts/plot_results.py results/mom 40 --mom
+
+# Choose the figure width and output location; PNG also writes a vector PDF.
+uv run python fortran/scripts/plot_results.py results/mom 40 --mom --width 18 --output results/mom/mom_N40.png
+
+# Regenerate the mpmath N = 10 figure using only its CSV files.
+uv run python fortran/scripts/plot_results.py results 10 --mom --prefix InitialState.
 ```
+
+The MoM figure uses LaTeX and Computer Modern typography, with one panel per
+initial state and a shared legend. It denotes the sensitivity by
+
+```math
+\mathcal{M}_h[\hat O] = \frac{(\partial_h\langle\hat O\rangle)^2}
+                              {\operatorname{Var}(\hat O)}.
+```
+
+Both $F_h$ and $\mathcal{M}_h[\hat O]$ are plotted with the common
+normalization $(Nt)^2$. The curves use the raw CSV values without smoothing.
+Dashed vertical markers identify the low-lying doublet gap times
+$2\pi/\Delta_{k\overline{k}}$, computed from the spectrum of $H_0$ with
+100-digit precision. Sparse powers-of-ten ticks keep the long time axes
+readable.
+
+The default MoM output is `qfi_mom_dynamics_N=<N>_B=<B>.png` at 300 dpi,
+with a companion vector PDF of the same name. Use `--output figure.pdf`
+to save only a PDF. `--width` sets the figure width in inches; its default
+is 18 for MoM and 15 for the original QFI plot. Rendering requires LaTeX
+and `dvipng`, as for the existing QFI figures.
 
 ## Method
 
