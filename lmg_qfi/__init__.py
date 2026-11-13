@@ -54,10 +54,18 @@ from .simulation import (
 )
 
 from .io import save_to_file_qfi_dynamics
+from .mom import (
+    MOM_OBSERVABLES,
+    create_parity_operator,
+    create_mom_observables,
+    method_of_moments_mp,
+)
 
 from .plotting import (
     plot_qfi_data_subplot,
     plot,
+    plot_qfi_mom,
+    compute_gap_times,
     MAX_TIME_POW_PLOT,
     Y_LABEL_COORDINATE,
 )
@@ -112,6 +120,12 @@ __all__ = [
     # Plotting
     "plot_qfi_data_subplot",
     "plot",
+    "plot_qfi_mom",
+    "compute_gap_times",
+    "MOM_OBSERVABLES",
+    "create_parity_operator",
+    "create_mom_observables",
+    "method_of_moments_mp",
     "MAX_TIME_POW_PLOT",
     "Y_LABEL_COORDINATE",
     # SLD

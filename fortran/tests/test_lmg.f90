@@ -8,12 +8,12 @@ program test_lmg
    use lmg_kinds, only: wp, dp, ik, pi, czero, ci
    use lmg_linalg, only: matmul_omp, matvec, adjoint, identity_matrix, herm_eig, max_abs, unitarity_defect
    use lmg_operators, only: lmg_model, ladder_coefficients, spin_operators, hamiltonian_h0, &
-                            probe_operator, magnetization
+                            probe_operator, magnetization, apply_mom_observable, obs_x, obs_y
    use lmg_floquet, only: floquet_ops, power_table, build_floquet, build_power_table, propagate
    use lmg_states, only: ground_doublet, initial_state, state_from_name, state_enum_name, &
                          st_phys, st_gs_phys, st_gs_cat, st_cat_sum
    use lmg_timegrid, only: max_time_degree, python_time_grid, logspace_int, read_time_grid
-   use lmg_dynamics, only: qfi_point, qfi_diagnostics, qfi_dynamics
+   use lmg_dynamics, only: qfi_point, qfi_diagnostics, qfi_dynamics, method_of_moments
    use lmg_config, only: run_config, init_config, apply_setting, parse_real, parse_int
    use lmg_io, only: format_time, format_real, format_fixed2, result_file_name, write_csv
    implicit none
@@ -28,6 +28,7 @@ program test_lmg
    call test_propagation()
    call test_closed_form_qfi()
    call test_qfi_against_finite_difference()
+   call test_method_of_moments()
    call test_ground_doublet()
    call test_time_grid()
    call test_config_and_io()
@@ -340,6 +341,106 @@ contains
       call check(diag%qfi_error > 0.0_wp .and. diag%qfi_error < 1.0e-18_wp, 'QFI error estimate finite and small')
    end subroutine test_closed_form_qfi
 
+   !> Method of moments: observables, MoM = (d<O>/dh)^2 / Var(O) against central
+   !> differences of <O> in h, MoM <= F_h, and the eigenstate (Var = 0) limit.
+   subroutine test_method_of_moments()
+      integer, parameter :: nspins = 6, n = nspins + 1, nt = 6
+      real(wp), parameter :: eps = 1.0e-12_wp
+      type(lmg_model) :: mdl
+      type(floquet_ops) :: flp, flm
+      type(power_table) :: ptp, ptm
+      type(qfi_diagnostics) :: diag
+      type(qfi_point) :: res(nt, 4)
+      complex(wp) :: psi0(n, 4), v0(n), v1(n), kp(n), km(n), psi(n), w(n), sx(n, n), sy(n, n), sz(n, n)
+      complex(wp) :: x(n, n), y(n, n), e(n)
+      integer(ik) :: times(nt)
+      real(wp) :: e0, e1, op, om, mean, var, mom_fd, mom(3), err, bound, sat, herm
+      integer :: it, is, k, i, pass
+
+      write (output_unit, '(a)') 'method of moments'
+      call spin_operators(nspins, sx, sy, sz)
+      do i = 1, n
+         e = czero
+         e(i) = (1.0_wp, 0.0_wp)
+         call apply_mom_observable(nspins, obs_x, e, x(:, i))
+         call apply_mom_observable(nspins, obs_y, e, y(:, i))
+      end do
+      call check_small(max_abs(y - ci*matmul(sz, x)), 0.0_wp, 'Y = i Sz X')
+      herm = max_abs(x - adjoint(x)) + max_abs(y - adjoint(y)) + max_abs(matmul(sz, x) + matmul(x, sz))
+      call check_small(herm, 0.0_wp, 'X, Y Hermitian and {Sz, X} = 0')
+      call check_small(max_abs(matmul(x, x) - identity_matrix(n)), 0.0_wp, 'X^2 = 1')
+
+      times = [1_ik, 3_ik, 10_ik, 25_ik, 64_ik, 101_ik]
+      do pass = 1, 2
+         if (pass == 1) then
+            mdl = model(nspins, 1.0_wp, 0.4_wp, 0.02_wp, 2, 6, 0.4_wp, 0.9_wp, 0.3_wp, pi)
+         else
+            mdl = model(nspins, 1.0_wp, 0.4_wp, 0.0_wp, 2, 10, 0.0_wp, 0.0_wp, 0.0_wp, pi)
+         end if
+         call ground_doublet(nspins, mdl%j, mdl%b, e0, e1, v0, v1)
+         call initial_state(st_phys, nspins, v0, v1, .true., psi0(:, 1))
+         call initial_state(st_gs_phys, nspins, v0, v1, .true., psi0(:, 2))
+         call initial_state(st_gs_cat, nspins, v0, v1, .true., psi0(:, 3))
+         call initial_state(st_cat_sum, nspins, v0, v1, .true., psi0(:, 4))
+         call qfi_dynamics(mdl, times, psi0, res, diag)
+         call build_floquet(mdl, flp, derivative=.false., h=mdl%h + eps)
+         call build_floquet(mdl, flm, derivative=.false., h=mdl%h - eps)
+         call build_power_table(flp, maxval(times)/int(mdl%nu, ik), ptp)
+         call build_power_table(flm, maxval(times)/int(mdl%nu, ik), ptm)
+         err = 0.0_wp
+         bound = 0.0_wp
+         sat = 0.0_wp
+         do is = 1, 4
+            do it = 1, nt
+               call propagate(flp, ptp, times(it), psi0(:, is), kp)
+               call propagate(flm, ptm, times(it), psi0(:, is), km)
+               psi = 0.5_wp*(kp + km)
+               mom = [res(it, is)%mom_sz, res(it, is)%mom_x, res(it, is)%mom_y] &
+                     *(real(nspins, wp)*real(times(it), wp))**2
+               do k = 1, 3
+                  bound = max(bound, mom(k)/res(it, is)%qfi_raw - 1.0_wp)
+                  call apply_mom_observable(nspins, k, psi, w)
+                  mean = real(dot_product(psi, w), wp)
+                  var = real(dot_product(w, w), wp) - mean**2
+                  if (var < 1.0e-6_wp) cycle      ! eigenstate: checked below
+                  call apply_mom_observable(nspins, k, kp, w)
+                  op = real(dot_product(kp, w), wp)
+                  call apply_mom_observable(nspins, k, km, w)
+                  om = real(dot_product(km, w), wp)
+                  mom_fd = ((op - om)/(2.0_wp*eps))**2/var
+                  err = max(err, abs(mom(k) - mom_fd)/max(mom_fd, 1.0e-6_wp))
+               end do
+               ! At h = 0 parity is conserved and the z probe flips it: for the parity
+               ! eigenstates GS_cat and CatSum, measuring X saturates F_h.
+               if (pass == 2 .and. is >= 3) sat = max(sat, abs(mom(2)/res(it, is)%qfi_raw - 1.0_wp))
+            end do
+         end do
+         if (pass == 1) then
+            call check_small(err, 1.0e-15_wp, 'MoM(Sz, X, Y) = central differences (h = 0.02, tilted probe)')
+            call check_small(max(bound, 0.0_wp), 1.0e-25_wp, 'MoM <= F_h (h = 0.02)')
+         else
+            call check_small(err, 1.0e-15_wp, 'MoM(Sz, X, Y) = central differences (h = 0)')
+            call check_small(max(bound, 0.0_wp), 1.0e-25_wp, 'MoM <= F_h (h = 0)')
+            call check_small(sat, 1.0e-25_wp, 'eigenstate limit: MoM(X) = F_h for parity eigenstates (h = 0)')
+         end if
+      end do
+
+      ! two-level check of the eigenstate limit: psi(h) = cos h |S> + sin h |-S>, O = X
+      ! at h = 0: <X> = sin 2h, MoM -> 4 = F_h.
+      psi = czero
+      psi(1) = (1.0_wp, 0.0_wp)
+      w = czero
+      w(n) = (1.0_wp, 0.0_wp)
+      call check_small(abs(method_of_moments(nspins, obs_x, psi, w) - 4.0_wp), 1.0e-30_wp, &
+                       'two-level example, regular formula')
+      psi = (psi + w)/sqrt(2.0_wp)                ! X eigenstate
+      w = czero
+      w(1) = (1.0_wp, 0.0_wp)/sqrt(2.0_wp)
+      w(n) = -(1.0_wp, 0.0_wp)/sqrt(2.0_wp)       ! derivative points to the other parity
+      call check_small(abs(method_of_moments(nspins, obs_x, psi, w) - 4.0_wp), 1.0e-30_wp, &
+                       'two-level example, eigenstate limit')
+   end subroutine test_method_of_moments
+
    !> Whole pipeline against the definition used by the Python code:
    !> F_h = 4 (<d|d> - |<psi|d>|^2) with d = (psi(h+eps) - psi(h-eps))/(2 eps).
    subroutine test_qfi_against_finite_difference()
@@ -553,7 +654,7 @@ contains
       call check(ierr == 0, 'CSV file written')
       open (newunit=unit, file='test_lmg_out.tmp', status='old', action='read')
       read (unit, '(a)') line
-      call check(trim(line) == 'time,m_x,m_y,m_z,qfi,qfi_raw', 'CSV header')
+      call check(trim(line) == 'time,m_x,m_y,m_z,qfi,qfi_raw,mom_sz,mom_x,mom_y', 'CSV header')
       read (unit, '(a)') line
       call check(line(1:3) == '12,' .and. index(line, ',0.12500000000000000,') == 3, 'CSV row')
       close (unit, status='delete')
