@@ -61,15 +61,19 @@ They use the same exact `∂ψ` as the QFI: `∂_h<O> = 2 Re<(O−<O>)ψ|∂ψ>`
 parity-symmetric `GS_cat` and `CatSum` at h = 0), the ratio is 0/0 and its
 h → 0 limit `4 <∂ψ|D|∂ψ>² / ‖D∂ψ‖²`, `D = O − <O>`, is written instead
 (see `method_of_moments` in `lmg_dynamics.f90`; the Python version is
-`lmg_qfi/mom.py`). Plot them with
+`lmg_qfi/mom.py`). The solver CSVs are not committed (only the figures
+`results/mom/qfi_mom_dynamics_N=<N>_B=0.40.png` for N = 20, 40, 60); generate
+and plot them with
 
 ```bash
+fortran/build/lmg_qfi --system-size 40 --steps 250 --num-points 300 --output-dir results/mom
 uv run python fortran/scripts/plot_results.py results/mom 40 --mom
 
 # Choose the figure width and output location; PNG also writes a vector PDF.
 uv run python fortran/scripts/plot_results.py results/mom 40 --mom --width 18 --output results/mom/mom_N40.png
 
-# Regenerate the mpmath N = 10 figure using only its CSV files.
+# Regenerate the mpmath N = 10 figure from its CSV files
+# (first: uv run python quantum_fisher_information_simulation_mpmath.py --system-size 10).
 uv run python fortran/scripts/plot_results.py results 10 --mom --prefix InitialState.
 ```
 
@@ -205,8 +209,8 @@ of the `m_y ≈ 10⁻¹⁷` entries of the reference `GS_PHYS` files for N ≥ 4
 There is no reference file for N = 50. The mpmath implementation evaluated at
 eight times between 1 and 10¹⁵ (`steps = 10`, `dps = 60`) agrees with the
 solver to 9·10⁻¹⁸ in `qfi_raw` and to the last digit in the other columns.
-`results/fortran.*_N=50_B=0.40.csv` and `results/qfi_dynamics_N=50_B=0.40.png`
-were produced with this solver (`steps = 250, num-points = 300`).
+The N = 50 files are not committed; they are produced in a few seconds with
+`fortran/build/lmg_qfi --system-size 50 --steps 250 --num-points 300`.
 
 For sizes without reference files, `fortran/scripts/mpmath_reference_points.py`
 evaluates the mpmath implementation at a few chosen times (see its
@@ -272,15 +276,17 @@ solver options per case in `cases.txt`.
 
 ## Dense time grids
 
-`results/dense/` holds runs for N = 60 and N = 100 (`steps = 250`) on a grid
-about 100 times denser than the standard one: every period up to 10⁴ and
-60 000 log-spaced times up to the last decade, 69 999 points in all.
+Dense runs for N = 60 and N = 100 (`steps = 250`) use a grid about 100 times
+denser than the standard one: every period up to 10⁴ and 60 000 log-spaced
+times up to the last decade, 69 999 points in all. Their CSVs (70 000 rows
+per state) are not committed; the N = 100 figure is
+`results/qfi_dynamics_N=100_B=0.40.png`.
 
 ```bash
 uv run python fortran/scripts/dense_time_grid.py --system-size 100 times_N100.txt
 fortran/build/lmg_qfi --system-size 100 --steps 250 --times-file times_N100.txt --output-dir results/dense
 uv run python fortran/scripts/plot_results.py results/dense 100 \
-    --label-y 0.16 --label-offset 0.1 --legend-loc 0.44 0.567 --max-pairs 6
+    --output results/qfi_dynamics_N=100_B=0.40.png --label-y 0.16 --label-offset 0.1 --legend-loc 0.44 0.567 --max-pairs 6
 ```
 
 `plot_results.py` draws the curves with the package's plotting function but
