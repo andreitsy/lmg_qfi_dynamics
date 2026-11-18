@@ -8,7 +8,8 @@ program test_lmg
    use lmg_kinds, only: wp, dp, ik, pi, czero, ci
    use lmg_linalg, only: matmul_omp, matvec, adjoint, identity_matrix, herm_eig, max_abs, unitarity_defect
    use lmg_operators, only: lmg_model, ladder_coefficients, spin_operators, hamiltonian_h0, &
-                            probe_operator, magnetization, apply_mom_observable, obs_x, obs_y
+                            probe_operator, magnetization, apply_mom_observable, obs_x, obs_y, &
+                            n_mom_observables
    use lmg_floquet, only: floquet_ops, power_table, build_floquet, build_power_table, propagate
    use lmg_states, only: ground_doublet, initial_state, state_from_name, state_enum_name, &
                          st_phys, st_gs_phys, st_gs_cat, st_cat_sum
@@ -369,6 +370,8 @@ contains
       herm = max_abs(x - adjoint(x)) + max_abs(y - adjoint(y)) + max_abs(matmul(sz, x) + matmul(x, sz))
       call check_small(herm, 0.0_wp, 'X, Y Hermitian and {Sz, X} = 0')
       call check_small(max_abs(matmul(x, x) - identity_matrix(n)), 0.0_wp, 'X^2 = 1')
+      call apply_mom_observable(nspins, n_mom_observables + 1, x(:, 1), w)
+      call check(all(w /= w), 'unknown observable id gives NaN')
 
       times = [1_ik, 3_ik, 10_ik, 25_ik, 64_ik, 101_ik]
       do pass = 1, 2

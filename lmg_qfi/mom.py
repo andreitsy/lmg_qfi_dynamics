@@ -13,7 +13,9 @@ observables for Floquet-time-crystal sensors:
                 Dicke basis (equal to exp(-i pi S_x) up to the global phase i^N);
 * ``Y``      -- dressed parity-magnetization Y = i S_z X (Hermitian since {S_z, X} = 0).
 
-``d_h <O> = 2 Re <psi|O|d_h psi>`` uses the same finite-difference ket derivative as the QFI.
+``d_h <O> = 2 Re <(O - <O>) psi|d_h psi>`` uses the same finite-difference ket derivative as the
+QFI. Centring O removes the term 2 <O> Re <psi|d_h psi>, which vanishes for an exactly normalized
+state but not for a finite-difference derivative (same form as the Fortran solver).
 
 If |psi> is an eigenstate of O (Var(O) = 0), e.g. the parity of a parity-symmetric state at
 h = 0, the ratio is 0/0. Its h -> h0 limit is finite and is used instead: with
@@ -38,10 +40,6 @@ def create_mom_observables(Sz):
     n = Sz.rows - 1
     X = create_parity_operator(n)
     return {"Sz": Sz, "X": X, "Y": mp.j * Sz * X}
-
-
-def _expectation(bra, O, ket):
-    return (bra.transpose_conj() * O * ket)[0, 0]
 
 
 def method_of_moments_mp(O, ket_t, dket, var_rel_tol=None):
@@ -74,7 +72,8 @@ def method_of_moments_mp(O, ket_t, dket, var_rel_tol=None):
     var = second - mean ** 2
 
     if var > var_rel_tol * max(second, mp.mpf(1)):
-        signal = 2 * mp.re((O_ket.transpose_conj() * dket)[0, 0])
+        D_ket = O_ket - mean * ket_t
+        signal = 2 * mp.re((D_ket.transpose_conj() * dket)[0, 0])
         return signal ** 2 / var
 
     # Eigenstate of O: second-order limit in (h - h0).
