@@ -30,6 +30,7 @@ import mpmath as mp
 from lmg_qfi.config import InitialState, QFIInformation, UF
 from lmg_qfi.evolution import calculate_unitary_T, calculate_unitary_at_time_mp
 from lmg_qfi.io import save_to_file_qfi_dynamics
+from lmg_qfi.mom import create_mom_observables, method_of_moments_mp
 from lmg_qfi.operators import create_hamiltonian_h0, create_spin_xyz_operators
 from lmg_qfi.qfi import dketa_t, quantum_fisher_information_mp
 
@@ -60,7 +61,7 @@ def initial_states(n_spins: int, j, b) -> dict[InitialState, mp.matrix]:
 def reference_points(n_spins: int, times: list[int], *, b="0.4", j="1.0", period="1", h="0.0",
                      steps: int = 10, dps: int = 60, nu: int = 2, theta="0", varphi="0", phi_0="0",
                      states=ALL_STATES) -> dict[InitialState, list[QFIInformation]]:
-    """QFI and magnetisation of the mpmath reference at the given times."""
+    """QFI, magnetisation and method of moments of the mpmath reference at the given times."""
     with mp.workdps(dps):
         params = dict(
             phi=mp.pi, J=mp.mpf(j), B=mp.mpf(b), T=mp.mpf(period), h=mp.mpf(h),
@@ -71,6 +72,7 @@ def reference_points(n_spins: int, times: list[int], *, b="0.4", j="1.0", period
         eps = params["epsilon"]
         h0 = create_hamiltonian_h0(params["J"], params["B"], n_spins)
         zsum, xsum, ysum = create_spin_xyz_operators(n_spins)
+        mom_observables = create_mom_observables(zsum)
         kets = initial_states(n_spins, params["J"], params["B"])
 
         floquet = {}
@@ -89,6 +91,8 @@ def reference_points(n_spins: int, times: list[int], *, b="0.4", j="1.0", period
                 ket = unitary[0] * kets[state]
                 dket = dketa_t(unitary[1] * kets[state], unitary[-1] * kets[state], eps)
                 qfi = quantum_fisher_information_mp(dket, ket)
+                mom = {f"mom_{name.lower()}": float(method_of_moments_mp(O, ket, dket) / (n_spins ** 2 * t ** 2))
+                       for name, O in mom_observables.items()}
                 results[state].append(QFIInformation(
                     qfi_raw_value=str(qfi),
                     qfi=float(qfi / (n_spins ** 2 * t ** 2)),
@@ -96,6 +100,7 @@ def reference_points(n_spins: int, times: list[int], *, b="0.4", j="1.0", period
                     m_x=float(mp.re((ket.transpose_conj() * xsum * ket)[0, 0]) / n_spins),
                     m_y=float(mp.re((ket.transpose_conj() * ysum * ket)[0, 0]) / n_spins),
                     m_z=float(mp.re((ket.transpose_conj() * zsum * ket)[0, 0]) / n_spins),
+                    **mom,
                 ))
             logging.info("t = %d: %.1f s", t, time.time() - started)
     return results

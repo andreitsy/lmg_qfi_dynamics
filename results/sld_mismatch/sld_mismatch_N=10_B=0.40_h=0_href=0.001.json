@@ -1,0 +1,31 @@
+{
+  "system_size": 10,
+  "J": "1",
+  "B": "0.4",
+  "T": "1",
+  "kick_phase": "pi",
+  "h_reference": "0.001",
+  "h_target": "0",
+  "dps": 50,
+  "steps": 3200,
+  "gs_phys_orientation": "positive Sz",
+  "sld": "canonical pure-state, zero kernel-kernel block",
+  "normalization": "(N t)^2",
+  "time_points": 10000,
+  "diagnostics": {
+    "max_norm_error": 2.715681827595088e-44,
+    "max_normalized_tangent_defect": 4.5291416559183847e-23,
+    "max_sld_hermiticity_error": 0.0,
+    "max_local_relative_error": 1.6774991937468638e-47,
+    "max_reference_matched_relative_error": 3.1214782170700445e-48,
+    "max_relative_bound_excess": 0.0,
+    "max_fixed_observable_fd_relative_error": 2.031413401555731e-27,
+    "elapsed_seconds": 4454.247550592758,
+    "max_normalized_mismatch": {
+      "GS_PHYS": 0.16561736717644227,
+      "GS_CAT": 0.24044125142279354,
+      "PHYS": 0.10112324804670135,
+      "CAT_SUM": 0.12097063694718346
+    }
+  }
+}

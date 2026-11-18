@@ -19,6 +19,7 @@ from lmg_qfi import (
     run_simulation,
     save_to_file_qfi_dynamics,
     plot,
+    plot_qfi_mom,
     setup_logging,
 )
 from lmg_qfi.config import read_defaults_args_from_config, parse_arguments as _parse_arguments
@@ -109,6 +110,8 @@ if __name__ == "__main__":
                     simulations[initial_state] = pd.read_csv(file)
         if simulations:
             plot(simulations, simulation_params, output_dir)
+            if mom_plot := plot_qfi_mom(simulations, simulation_params, output_dir):
+                logging.info(f"Saved QFI + MoM plot {mom_plot}")
         else:
             logging.warning(f"Didn't find files in {output_dir}")
 

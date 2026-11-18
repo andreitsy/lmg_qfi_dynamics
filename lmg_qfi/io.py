@@ -29,6 +29,9 @@ def save_to_file_qfi_dynamics(
         "m_z": [],
         "qfi": [],
         "qfi_raw": [],
+        "mom_sz": [],
+        "mom_x": [],
+        "mom_y": [],
     }
     for result in results:
         csv_data["time"].append(result.time)
@@ -37,6 +40,9 @@ def save_to_file_qfi_dynamics(
         csv_data["m_z"].append(result.m_z)
         csv_data["qfi"].append(result.qfi)
         csv_data["qfi_raw"].append(result.qfi_raw_value)
+        csv_data["mom_sz"].append(result.mom_sz)
+        csv_data["mom_x"].append(result.mom_x)
+        csv_data["mom_y"].append(result.mom_y)
 
     df = pd.DataFrame(csv_data)
     output_file.parent.mkdir(parents=True, exist_ok=True)
