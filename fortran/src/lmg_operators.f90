@@ -5,6 +5,7 @@
 !> the Dicke state |S, m> with S = N/2 and m = S - (i - 1), i.e. the first
 !> basis vector is the fully polarised state |S, S>.
 module lmg_operators
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
    use lmg_kinds, only: wp, pi, czero
    implicit none
    private
@@ -160,8 +161,10 @@ contains
             w(i) = m*v(i)
          case (obs_x)
             w(i) = v(n + 1 - i)
-         case default
+         case (obs_y)
             w(i) = cmplx(0.0_wp, m, wp)*v(n + 1 - i)
+         case default  ! unknown id: NaN, so it cannot pass for one of the above
+            w(i) = cmplx(ieee_value(0.0_wp, ieee_quiet_nan), 0.0_wp, wp)
          end select
       end do
    end subroutine apply_mom_observable
