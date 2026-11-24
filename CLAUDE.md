@@ -2,36 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Commands
-
-```bash
-# Run all tests
-uv run pytest tests/
-
-# Run a single test file
-uv run pytest tests/test_operators.py -v
-
-# Run a single test by name
-uv run pytest tests/test_qfi.py::TestQFI::test_something -v
-
-# Run with coverage
-uv run pytest tests/ --cov=lmg_qfi
-
-# Run the simulation (uses parameters.ini for defaults)
-uv run python quantum_fisher_information_simulation_mpmath.py
-
-# Run for a specific initial state
-uv run python quantum_fisher_information_simulation_mpmath.py --init-state GS_phys
-
-# Generate plot from existing results
-uv run python quantum_fisher_information_simulation_mpmath.py --plot
-
-# Fortran solver (quad precision, OpenMP): build, test, run
-make -C fortran && make -C fortran test
-fortran/build/lmg_qfi --system-size 50 --steps 250 --num-points 300
-uv run pytest tests/test_fortran_solver.py -v   # builds the solver, compares with mpmath and results/
-```
-
 ## Architecture
 
 The library simulates QFI dynamics in the Lipkin-Meshkov-Glick (LMG) model driven by a Floquet kick and AC field:
@@ -42,61 +12,22 @@ H(t) = -(2J/N) Sz² - 2B Sx - π Σ δ(t - mT) Sx + V(t)
 
 All matrix computations use **mpmath** (arbitrary precision) via `mp.matrix`. System size `N` spins → Hilbert space dimension `N+1`.
 
-### Data flow
-
-```
-parameters.ini / CLI args
-        ↓
-    SimulationParams  (config.py)
-        ↓
-    run_simulation()  (simulation.py)
-        ├── create_hamiltonian_h0()    → H₀ matrix
-        ├── calculate_unitary_T()      → Floquet unitary U_F for one period
-        │       └── evalution_T_step() → Trotter integration of V(t) = H₀ + h·S_α(t)
-        ├── UF dataclass               → eigendecomposition of U_F for fast U_F^n
-        └── simulation_with_AC_field_mp()
-                └── process_time_point_mp()  → QFIInformation per time step
-                        ├── calculate_unitary_at_time_mp()  → U(t) via find_power_r_mpmath()
-                        ├── quantum_fisher_information_mp() → QFI via finite differences
-                        └── compute_sld_info()              → SLD cross-check (optional)
-```
-
 ### Key operator conventions
 
 - `create_spin_xyz_operators(n)` returns `(Sz, Sx, Sy)` — **note: Sz first**, not Sx
 - `ac_time(S_x, S_y, S_z, ...)` takes `(Sx, Sy, Sz)` — **note: Sx first**
-- `create_hamiltonian_h0(J, B, N)` — args are coupling_zz, coupling_x, num_spins
-
-### QFI computation
-
-QFI is computed by finite differences over the probe field `h`:
-- Compute `U_F(h)`, `U_F(h+ε)`, `U_F(h-ε)` — each stored as a `UF` eigendecomposition
-- `dket = (U(h+ε)|ψ₀⟩ - U(h-ε)|ψ₀⟩) / (2ε)`
-- `QFI = 4(⟨∂ψ|∂ψ⟩ - |⟨ψ|∂ψ⟩|²)`, normalized as `QFI / (N² t²)`
 
 ### Precision control
 
 `mp.workdps(dps)` context wraps the entire simulation. `epsilon = 1e-(dps//2)` is the finite-difference step. Default `dps=15` (double); use 50+ for high precision. All `mp.mpf` values should be set inside the `workdps` context.
 
-### Configuration
-
-`parameters.ini` at project root sets defaults. CLI args override them. The `[Simulation]` section maps to `SimulationParams` fields; `phi-kick-phase = pi` is parsed as `mp.pi`.
-
 ### Fortran solver (`fortran/`)
 
 Port of the mpmath simulation in `real128` with OpenMP; details in `fortran/README.md`.
 
-- Same Trotter grid, time grid and CSV columns as the Python code; output files are
-  `fortran.<STATE>_N=<N>_B=<B>.csv` (the `--plot` of the Python script reads them).
-- The h-derivative is propagated analytically (no finite difference) and `U_F^r` is applied by
-  repeated squaring (no eigen-decomposition of `U_F`). State error ≈ `(N+1)·2e-34·t·m` (m = 1 for
-  h = 0, ≈ steps otherwise); every run prints its estimate. Full double precision up to N = 50,
-  ~14 digits at the end of the N = 60 grid, ~9 digits at the end of the N = 80 grid.
 - `GS_phys` orientation is explicit (`--gs-phys-orientation up|down`); mpmath's is arbitrary.
 - The reference files in `results/` were produced with `steps=250, num-points=300` (N = 20, 40)
   and `steps=100, num-points=50` (N = 60, 80), `dps=60`, not with the committed `parameters.ini`.
-- On a Slurm cluster build on the login node (`make -C fortran`) and submit
-  `fortran/slurm/lmg_qfi.sbatch` from a run directory `<project>/tmp/<experiment>/<run>/`.
 - `lmg_qfi/__init__.py` sets `mp.dps = 100` on the mpmath *module*, which does not change the working
   precision (still 15 digits); code that needs more digits must use `mp.workdps`.
 
